@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and runtime output
+*.log
+logs/
+
+# Test and coverage output
+coverage/
+.nyc_output/
+
+# Build output
+dist/
+build/
+
+# OS/editor files
+.DS_Store
+.idea/
+*.swp
