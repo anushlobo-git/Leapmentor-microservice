@@ -12,6 +12,8 @@ const createEscrowService = ({
   runInTransaction,
   commissionRate = 20,
   getCommissionRate = async () => commissionRate,
+  generateInvoice,
+  logger = console,
 }) => {
   const requireAmount = (value, label) => {
     const amount = Number(value);
@@ -23,6 +25,41 @@ const createEscrowService = ({
 
   const getContext = (requestId, correlationId) =>
     workspaceClient.getPaymentContext(requestId, correlationId);
+
+  const queueInvoiceEmail = async (requestId, correlationId) => {
+    if (
+      !generateInvoice ||
+      typeof workspaceClient.getInvoiceContext !== "function" ||
+      typeof workspaceClient.queueInvoiceEmail !== "function"
+    ) return;
+    try {
+      const request = await workspaceClient.getInvoiceContext(requestId, correlationId);
+      if (!request?.mentee?.email) return;
+      const invoiceNumber = `INV-${String(requestId).slice(-8).toUpperCase()}`;
+      const pdf = await generateInvoice({
+        ...request,
+        invoiceNumber,
+        platformFeePercent: request.commissionRate ?? await getCommissionRate(),
+      });
+      await workspaceClient.queueInvoiceEmail({
+        eventType: "payment.invoice.email",
+        sourceEventId: `payment-invoice:${requestId}`,
+        invoiceNumber,
+        reporterEmail: request.mentee.email,
+        reporterName: request.mentee.name,
+        mentorName: request.mentor?.name,
+        sessionRate: request.sessionRate,
+        sessionCount: request.sessionCount,
+        totalAmount: request.totalAmount,
+        invoicePdfBase64: pdf.toString("base64"),
+      }, correlationId);
+    } catch (error) {
+      logger.warn?.("Invoice email could not be queued after payment", {
+        requestId: String(requestId),
+        error: error.message,
+      });
+    }
+  };
 
   const requireParticipant = (context, userId) => {
     const user = idOf(userId);
@@ -75,6 +112,7 @@ const createEscrowService = ({
       status: "ongoing",
       paidAt: new Date(),
     }, correlationId);
+    await queueInvoiceEmail(connectRequestId, correlationId);
 
     return {
       mentorAmount: rate * count,

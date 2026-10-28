@@ -21,19 +21,50 @@ const createConnectRequestRepository = (ConnectRequest) => {
   const findById = (id) => ConnectRequest.findById(id).lean();
 
   const findMyRequests = (mentee) =>
-    ConnectRequest.find({ mentee }).sort({ requestedAt: -1, createdAt: -1 }).lean();
+    ConnectRequest.find({ mentee })
+      .sort({ requestedAt: -1, createdAt: -1 })
+      .lean();
 
   const findIncomingRequests = (mentor, status) =>
     ConnectRequest.find({
       mentor,
       ...(status ? { status } : {}),
-    }).sort({ requestedAt: -1, createdAt: -1 }).lean();
+    })
+      .sort({ requestedAt: -1, createdAt: -1 })
+      .lean();
 
   const findOngoingConnects = (userId) =>
     ConnectRequest.find({
       $or: [{ mentee: userId }, { mentor: userId }],
       status: { $in: ["accepted", "ongoing", "completed"] },
-    }).sort({ updatedAt: -1 }).lean();
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+  const findAcceptedSessionsForReminders = () =>
+    ConnectRequest.find({ status: "accepted", confirmedSlot: { $ne: null } })
+      .select("mentee mentor confirmedSlot")
+      .lean();
+
+  const findCompletedPaidSessions = () =>
+    ConnectRequest.find({
+      status: "completed",
+      paymentStatus: "paid",
+      totalAmount: { $gt: 0 },
+    })
+      .select("totalAmount commissionAmount")
+      .lean();
+
+  const countRefundedRequests = () =>
+    ConnectRequest.countDocuments({ paymentStatus: "refunded" });
+
+  const findSessionsByMonth = (monthStart, monthEnd) =>
+    ConnectRequest.find({
+      status: "completed",
+      completedAt: { $gte: monthStart, $lt: monthEnd },
+    })
+      .select("totalAmount")
+      .lean();
 
   const countCompletedSessionsByUser = (userId) =>
     ConnectRequest.countDocuments({
@@ -75,6 +106,10 @@ const createConnectRequestRepository = (ConnectRequest) => {
     findMyRequests,
     findIncomingRequests,
     findOngoingConnects,
+    findAcceptedSessionsForReminders,
+    findCompletedPaidSessions,
+    countRefundedRequests,
+    findSessionsByMonth,
     countCompletedSessionsByUser,
     countByStatus,
     updatePendingResponse,

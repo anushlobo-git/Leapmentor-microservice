@@ -12,11 +12,32 @@ test("creates a consumer group and acknowledges successfully processed events", 
     xGroupCreate: async (...args) => calls.push(["group", ...args]),
     xReadGroup: async () => {
       reads += 1;
-      if (reads === 1) return [{ name: "notifications", messages: [{ id: "1-0", message: { payload: JSON.stringify({ sourceEventId: "event-1", recipient: "user-1", type: "new_message", title: "New", message: "Hello" }) } }] }];
+      if (reads === 1)
+        return [
+          {
+            name: "notifications",
+            messages: [
+              {
+                id: "1-0",
+                message: {
+                  payload: JSON.stringify({
+                    sourceEventId: "event-1",
+                    recipient: "user-1",
+                    type: "new_message",
+                    title: "New",
+                    message: "Hello",
+                  }),
+                },
+              },
+            ],
+          },
+        ];
       return null;
     },
     xAck: async (...args) => calls.push(["ack", ...args]),
-    quit: async () => { client.isOpen = false; },
+    quit: async () => {
+      client.isOpen = false;
+    },
   };
   const events = [];
   const consumer = createNotificationConsumer({
@@ -24,7 +45,9 @@ test("creates a consumer group and acknowledges successfully processed events", 
     streamName: "notifications",
     groupName: "notifications-support",
     consumerName: "test-consumer",
-    notificationService: { createFromEvent: async (event) => events.push(event) },
+    notificationService: {
+      createFromEvent: async (event) => events.push(event),
+    },
     enabled: true,
   });
   await consumer.start();
@@ -36,8 +59,107 @@ test("creates a consumer group and acknowledges successfully processed events", 
 });
 
 test("stays inert when Redis transport is disabled", async () => {
-  const consumer = createNotificationConsumer({ client: {}, streamName: "notifications", groupName: "group", consumerName: "consumer", notificationService: {}, enabled: false });
+  const consumer = createNotificationConsumer({
+    client: {},
+    streamName: "notifications",
+    groupName: "group",
+    consumerName: "consumer",
+    notificationService: {},
+    enabled: false,
+  });
   assert.equal(await consumer.start(), false);
+});
+
+test("dispatches report email events to the email service and acknowledges only after delivery", async () => {
+  const calls = [];
+  let reads = 0;
+  const client = {
+    isOpen: true,
+    on: () => {},
+    xGroupCreate: async () => {},
+    xReadGroup: async () => {
+      reads += 1;
+      if (reads > 1) return null;
+      return [
+        {
+          name: "notifications",
+          messages: [
+            {
+              id: "2-0",
+              message: {
+                payload: JSON.stringify({
+                  eventType: "report.submitted.email",
+                  sourceEventId: "report-1",
+                }),
+              },
+            },
+          ],
+        },
+      ];
+    },
+    xAck: async (...args) => calls.push(["ack", ...args]),
+    quit: async () => {
+      client.isOpen = false;
+    },
+  };
+  const consumer = createNotificationConsumer({
+    client,
+    streamName: "notifications",
+    groupName: "group",
+    consumerName: "email-test",
+    notificationService: {
+      createFromEvent: async () =>
+        assert.fail("email event must not create an in-app notification"),
+    },
+    reportEmailService: {
+      sendReportEvent: async (event) =>
+        calls.push(["email", event.sourceEventId]),
+    },
+    enabled: true,
+  });
+  await consumer.start();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await consumer.stop();
+  assert.deepEqual(calls, [
+    ["email", "report-1"],
+    ["ack", "notifications", "group", "2-0"],
+  ]);
+});
+
+test("dispatches payment invoice events from Redis to the email service", async () => {
+  const calls = [];
+  let reads = 0;
+  const client = {
+    isOpen: true,
+    on: () => {},
+    xGroupCreate: async () => {},
+    xReadGroup: async () => {
+      reads += 1;
+      if (reads > 1) return null;
+      return [{
+        name: "notifications",
+        messages: [{
+          id: "3-0",
+          message: { payload: JSON.stringify({ eventType: "payment.invoice.email", sourceEventId: "payment-invoice:1" }) },
+        }],
+      }];
+    },
+    xAck: async (...args) => calls.push(["ack", ...args]),
+    quit: async () => { client.isOpen = false; },
+  };
+  const consumer = createNotificationConsumer({
+    client,
+    streamName: "notifications",
+    groupName: "group",
+    consumerName: "invoice-test",
+    notificationService: { createFromEvent: async () => assert.fail("invoice email must not create an in-app notification") },
+    reportEmailService: { sendReportEvent: async (event) => calls.push(["email", event.sourceEventId]) },
+    enabled: true,
+  });
+  await consumer.start();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await consumer.stop();
+  assert.deepEqual(calls, [["email", "payment-invoice:1"], ["ack", "notifications", "group", "3-0"]]);
 });
 
 test("claims idle pending records before reading new records", async () => {
@@ -51,9 +173,18 @@ test("claims idle pending records before reading new records", async () => {
       return { nextId: "0-0", messages: [] };
     },
     xReadGroup: async () => null,
-    quit: async () => { client.isOpen = false; },
+    quit: async () => {
+      client.isOpen = false;
+    },
   };
-  const consumer = createNotificationConsumer({ client, streamName: "notifications", groupName: "group", consumerName: "consumer", notificationService: {}, enabled: true });
+  const consumer = createNotificationConsumer({
+    client,
+    streamName: "notifications",
+    groupName: "group",
+    consumerName: "consumer",
+    notificationService: {},
+    enabled: true,
+  });
   await consumer.start();
   await new Promise((resolve) => setTimeout(resolve, 5));
   await consumer.stop();

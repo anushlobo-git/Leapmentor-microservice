@@ -49,6 +49,24 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.internalFinanceRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/finance",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalFinanceRouter,
+    );
+  }
+
+  if (container.internalReminderRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/reminders",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalReminderRouter,
+    );
+  }
+
   if (container.internalAdminUserRouter && container.internalAdminServiceAuth) {
     app.use(
       "/internal/v1/admin/users",
@@ -58,7 +76,10 @@ const createApp = (container = {}) => {
     );
   }
 
-  if (container.internalAdminStatsRouter && container.internalAdminServiceAuth) {
+  if (
+    container.internalAdminStatsRouter &&
+    container.internalAdminServiceAuth
+  ) {
     app.use(
       "/internal/v1/admin",
       container.internalAdminServiceAuth,
@@ -67,7 +88,22 @@ const createApp = (container = {}) => {
     );
   }
 
-  if (container.internalAdminReportsRouter && container.internalAdminServiceAuth) {
+  if (
+    container.internalAdminPaymentsRouter &&
+    container.internalAdminServiceAuth
+  ) {
+    app.use(
+      "/internal/v1/admin/payments",
+      container.internalAdminServiceAuth,
+      createRequireReady(container),
+      container.internalAdminPaymentsRouter,
+    );
+  }
+
+  if (
+    container.internalAdminReportsRouter &&
+    container.internalAdminServiceAuth
+  ) {
     app.use(
       "/internal/v1/admin/reports",
       container.internalAdminServiceAuth,
@@ -132,20 +168,20 @@ const createApp = (container = {}) => {
     );
   }
 
-    if (container.privateNoteRouter) {
-      app.use(
-        "/api/v1/private-notes",
-        createRequireReady(container),
-        container.privateNoteRouter,
-      );
-    }
-     if (container.noteRouter) {
-       app.use(
-         "/api/v1/notes",
-         createRequireReady(container),
-         container.noteRouter,
-       );
-     }
+  if (container.privateNoteRouter) {
+    app.use(
+      "/api/v1/private-notes",
+      createRequireReady(container),
+      container.privateNoteRouter,
+    );
+  }
+  if (container.noteRouter) {
+    app.use(
+      "/api/v1/notes",
+      createRequireReady(container),
+      container.noteRouter,
+    );
+  }
   app.use(errorHandler);
 
   return app;

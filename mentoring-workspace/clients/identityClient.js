@@ -24,7 +24,17 @@ const createIdentityClient = ({ httpClient }) => {
     return new Map(users.map((user) => [String(user._id), user]));
   };
 
-  return { getUserSummaries, getUserSummaryMap };
+  const searchUserSummaries = async (name, role, correlationId) => {
+    const params = new URLSearchParams({ name, role });
+    const response = await httpClient.request({
+      method: "GET",
+      path: `/internal/v1/users?${params.toString()}`,
+      correlationId,
+    });
+    return response?.data?.users || [];
+  };
+
+  return { getUserSummaries, getUserSummaryMap, searchUserSummaries };
 };
 
 module.exports = createIdentityClient;

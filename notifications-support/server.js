@@ -11,15 +11,23 @@ let server;
 
 const startServer = async () => {
   const connected = await container.database.connectDatabase();
-  if (!connected) process.stderr.write("MONGO_URI is not configured; Notifications will remain not ready\n");
+  if (!connected)
+    process.stderr.write(
+      "MONGO_URI is not configured; Notifications will remain not ready\n",
+    );
   await container.notificationConsumer.start();
+  if (connected) container.sessionReminderService?.start();
   server = httpServer.listen(env.port, () => {
-    process.stdout.write(`${env.serviceName} service listening on port ${env.port}\n`);
+    process.stdout.write(
+      `${env.serviceName} service listening on port ${env.port}\n`,
+    );
   });
 };
 
 startServer().catch((error) => {
-  process.stderr.write(`Notifications database startup failed: ${error.message}\n`);
+  process.stderr.write(
+    `Notifications database startup failed: ${error.message}\n`,
+  );
   process.exitCode = 1;
 });
 
@@ -27,6 +35,7 @@ const shutdown = (signal) => {
   process.stdout.write(`${signal} received; shutting down\n`);
 
   if (!server) return process.exit(0);
+  container.sessionReminderService?.stop();
   server.close((error) => {
     container.notificationConsumer.stop().catch((stopError) => {
       process.stderr.write(`${stopError.message}\n`);

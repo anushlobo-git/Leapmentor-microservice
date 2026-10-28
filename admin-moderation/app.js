@@ -77,6 +77,27 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.paymentsRouter) {
+    app.use(
+      "/api/v1/admin/payments",
+      createRequireReady(container),
+      container.paymentsRouter,
+    );
+  }
+
+  if (container.leapRequestsRouter) {
+    app.use(
+      "/api/v1/leap-requests",
+      createRequireReady(container),
+      container.leapRequestsRouter,
+    );
+    app.use(
+      "/api/v1/admin/leap-requests",
+      createRequireReady(container),
+      container.leapRequestsRouter,
+    );
+  }
+
   app.use(errorHandler);
 
   return app;

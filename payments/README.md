@@ -13,6 +13,11 @@ state changes it needs through Workspace's internal API.
 - Release escrow after session completion, refund escrow, and read payment
   status.
 - Apply the configured platform commission.
+- Generate authorized invoice PDFs and expose mentor earnings/payout history.
+- Own Leap Request state and grant mentee points with an auditable wallet ledger.
+- Expose Payments-owned metrics and transaction rows to Admin through internal
+  service-authenticated routes.
+- Seed the commission default idempotently with `npm run seed:commission`.
 - Support trusted internal wallet provisioning, refund processing, and
   commission settings for other services and Admin & Moderation.
 - Persist transactions and idempotency records to protect payment operations
@@ -33,6 +38,12 @@ Browser-facing routes use `/api/v1/escrow` and require authentication:
 | `POST /release/:requestId` | Release escrow |
 | `POST /refund/:requestId` | Refund escrow |
 | `GET /status/:requestId` | Read payment status |
+| `GET /commission-rate` | Read the configured commission rate |
+
+Invoice and mentor earnings routes are mounted at `/api/v1/invoices` and
+`/api/v1/mentor/earnings`. Leap Request browser paths are mounted at
+`/api/v1/leap-requests`; protected admin operations are fronted by Admin &
+Moderation.
 
 Trusted internal routes use `/internal/v1` and require service authentication:
 

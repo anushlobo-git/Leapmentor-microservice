@@ -43,6 +43,24 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.internalAdminPaymentsRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/admin/payments",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalAdminPaymentsRouter,
+    );
+  }
+
+  if (container.internalLeapRequestRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/leap-requests",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalLeapRequestRouter,
+    );
+  }
+
   if (container.internalRefundRouter && container.internalServiceAuth) {
     app.use(
       "/internal/v1/refunds",
@@ -66,6 +84,30 @@ const createApp = (container = {}) => {
       "/api/v1/escrow",
       createRequireReady(container),
       container.walletRouter,
+    );
+  }
+
+  if (container.leapRequestRouter) {
+    app.use(
+      "/api/v1/leap-requests",
+      createRequireReady(container),
+      container.leapRequestRouter,
+    );
+  }
+
+  if (container.invoiceRouter) {
+    app.use(
+      "/api/v1/invoices",
+      createRequireReady(container),
+      container.invoiceRouter,
+    );
+  }
+
+  if (container.earningsRouter) {
+    app.use(
+      "/api/v1/mentor/earnings",
+      createRequireReady(container),
+      container.earningsRouter,
     );
   }
 

@@ -40,6 +40,15 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.internalEmailRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/email-events",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalEmailRouter,
+    );
+  }
+
   if (container.notificationRouter) {
     app.use(
       "/api/v1/notifications",
@@ -49,7 +58,11 @@ const createApp = (container = {}) => {
   }
 
   if (container.supportRouter) {
-    app.use("/api/v1/support", createRequireReady(container), container.supportRouter);
+    app.use(
+      "/api/v1/support",
+      createRequireReady(container),
+      container.supportRouter,
+    );
   }
 
   if (container.aiRouter) {

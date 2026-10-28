@@ -9,6 +9,7 @@ const createFakes = () => {
     ["mentor-1:mentor", { user: "mentor-1", role: "mentor", balance: 0, escrow: 0 }],
   ]);
   const transactions = [];
+  const invoiceEmails = [];
   const context = {
     _id: "request-1",
     mentee: "mentee-1",
@@ -21,6 +22,16 @@ const createFakes = () => {
   const workspaceUpdates = [];
   const workspaceClient = {
     getPaymentContext: async () => context,
+    getInvoiceContext: async () => ({
+      mentee: { name: "Mentee", email: "mentee@example.com" },
+      mentor: { name: "Mentor", email: "mentor@example.com" },
+      paymentStatus: "paid",
+      commissionRate: 20,
+      sessionRate: 100,
+      sessionCount: 2,
+      totalAmount: 240,
+    }),
+    queueInvoiceEmail: async (event) => invoiceEmails.push(event),
     updatePaymentState: async (_id, state) => {
       workspaceUpdates.push(state);
       Object.assign(context, state);
@@ -47,8 +58,10 @@ const createFakes = () => {
     workspaceClient,
     runInTransaction: async (work) => work({}),
     commissionRate: 20,
+    generateInvoice: async () => Buffer.from("%PDF-invoice"),
+    logger: { warn() {} },
   });
-  return { service, wallets, transactions, context, workspaceUpdates };
+  return { service, wallets, transactions, context, workspaceUpdates, invoiceEmails };
 };
 
 test("holds mentee funds, records a ledger transaction, and updates Workspace state", async () => {
@@ -74,6 +87,32 @@ test("holds mentee funds, records a ledger transaction, and updates Workspace st
   });
   assert.equal(fakes.transactions[0].type, "escrow_hold");
   assert.equal(fakes.workspaceUpdates[0].paymentStatus, "paid");
+  assert.equal(fakes.invoiceEmails[0].reporterEmail, "mentee@example.com");
+  assert.equal(fakes.invoiceEmails[0].invoicePdfBase64, Buffer.from("%PDF-invoice").toString("base64"));
+});
+
+test("invoice email failures do not roll back a successful escrow payment", async () => {
+  const fakes = createFakes();
+  fakes.service = createEscrowService({
+    walletRepository: {
+      findByUserIdAndRole: async (userId, role) => fakes.wallets.get(`${userId}:${role}`),
+      save: async (wallet) => wallet,
+    },
+    transactionRepository: { createMany: async (items) => fakes.transactions.push(...items) },
+    workspaceClient: {
+      getPaymentContext: async () => fakes.context,
+      updatePaymentState: async (_id, state) => { fakes.workspaceUpdates.push(state); Object.assign(fakes.context, state); },
+      getInvoiceContext: async () => ({ mentee: { email: "mentee@example.com" } }),
+      queueInvoiceEmail: async () => { throw new Error("Notifications unavailable"); },
+    },
+    runInTransaction: async (work) => work({}),
+    getCommissionRate: async () => 20,
+    generateInvoice: async () => Buffer.from("%PDF"),
+    logger: { warn() {} },
+  });
+  const result = await fakes.service.pay({ connectRequestId: "request-1", sessionRate: 100, sessionCount: 2, menteeId: "mentee-1" });
+  assert.equal(result.paymentStatus, "paid");
+  assert.equal(fakes.transactions[0].type, "escrow_hold");
 });
 
 test("releases escrow to the mentor and marks the Workspace request completed", async () => {

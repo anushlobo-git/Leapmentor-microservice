@@ -1,4 +1,12 @@
-const createEscrowController = ({ escrowService }) => {
+const createEscrowController = ({ escrowService, getCommissionRate }) => {
+  const commissionRate = async (_req, res, next) => {
+    try {
+      return res.status(200).json({ commissionRate: await getCommissionRate() });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
   const pay = async (req, res, next) => {
     try {
       const result = await escrowService.pay({
@@ -64,7 +72,7 @@ const createEscrowController = ({ escrowService }) => {
     }
   };
 
-  return { pay, payAdditional, release, refund, getStatus };
+  return { commissionRate, pay, payAdditional, release, refund, getStatus };
 };
 
 module.exports = createEscrowController;

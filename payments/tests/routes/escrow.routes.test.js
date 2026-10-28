@@ -28,6 +28,7 @@ test("escrow payment route authenticates the browser and preserves the payment p
       refund: async () => ({}),
       getStatus: async () => ({}),
     },
+    getCommissionRate: async () => 20,
   });
   const router = createEscrowRouter({
     escrowController: controller,
@@ -57,6 +58,34 @@ test("escrow payment route authenticates the browser and preserves the payment p
     assert.equal(response.status, 200);
     assert.equal(calls[0].menteeId, "mentee-1");
     assert.equal(calls[0].sessionRate, 100);
+  } finally {
+    await new Promise((resolve) => serverDetails.server.close(resolve));
+  }
+});
+
+test("commission-rate route requires authentication and returns the frontend response shape", async () => {
+  const controller = createEscrowController({
+    escrowService: {},
+    getCommissionRate: async () => 17.5,
+  });
+  const router = createEscrowRouter({
+    escrowController: controller,
+    authenticate: createAuthenticate({ accessSecret: "test-secret" }),
+    validations,
+  });
+  const serverDetails = await startServer({
+    health: { isReady: () => true },
+    escrowRouter: router,
+  });
+
+  try {
+    const unauthorized = await fetch(`${serverDetails.url}/api/v1/escrow/commission-rate`);
+    const token = jwt.sign({ id: "mentee-1", type: "access" }, "test-secret");
+    const response = await fetch(`${serverDetails.url}/api/v1/escrow/commission-rate`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(unauthorized.status, 401);
+    assert.deepEqual(await response.json(), { commissionRate: 17.5 });
   } finally {
     await new Promise((resolve) => serverDetails.server.close(resolve));
   }

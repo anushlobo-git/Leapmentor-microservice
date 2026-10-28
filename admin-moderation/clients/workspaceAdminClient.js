@@ -1,4 +1,16 @@
 const createWorkspaceAdminClient = ({ httpClient }) => ({
+  getPaymentStats: (correlationId) =>
+    httpClient.request({
+      method: "GET",
+      path: "/internal/v1/admin/payments/stats",
+      correlationId,
+    }),
+  getPaymentChart: (correlationId) =>
+    httpClient.request({
+      method: "GET",
+      path: "/internal/v1/admin/payments/chart",
+      correlationId,
+    }),
   getCompletedSessionCount: (userId, correlationId) =>
     httpClient.request({
       method: "GET",

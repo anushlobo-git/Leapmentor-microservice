@@ -15,6 +15,9 @@ const createIdentityAdminClient = require("../clients/identityAdminClient");
 const createProfileAdminClient = require("../clients/profileAdminClient");
 const createWorkspaceAdminClient = require("../clients/workspaceAdminClient");
 const createPaymentsAdminClient = require("../clients/paymentsAdminClient");
+const createLeapRequestsService = require("../services/leapRequests.service");
+const createLeapRequestsController = require("../controllers/leapRequests.controller");
+const createLeapRequestsRouter = require("../routes/leapRequests.routes");
 const createTtlCache = require("../utils/ttlCache");
 const createDashboardService = require("../services/dashboard.service");
 const createDashboardController = require("../controllers/dashboard.controller");
@@ -28,6 +31,9 @@ const createVerificationRouter = require("../routes/verification.routes");
 const createReportsService = require("../services/reports.service");
 const createReportsController = require("../controllers/reports.controller");
 const createReportsRouter = require("../routes/reports.routes");
+const createAdminPaymentsService = require("../services/payments.service");
+const createAdminPaymentsController = require("../controllers/payments.controller");
+const createAdminPaymentsRouter = require("../routes/payments.routes");
 const createAdminAuthenticate = require("../middleware/adminAuthenticate");
 const createRequireReady = require("../middleware/requireReady");
 const { toAdminDTO } = require("../utils/admin.mapper");
@@ -77,10 +83,29 @@ const paymentsHttpClient = createInternalHttpClient({
   serviceToken: env.internalServiceToken,
   timeoutMs: env.internalHttpTimeoutMs,
 });
-const identityClient = createIdentityAdminClient({ httpClient: identityHttpClient });
-const profileClient = createProfileAdminClient({ httpClient: profileHttpClient });
-const workspaceClient = createWorkspaceAdminClient({ httpClient: workspaceHttpClient });
-const paymentsClient = createPaymentsAdminClient({ httpClient: paymentsHttpClient });
+const identityClient = createIdentityAdminClient({
+  httpClient: identityHttpClient,
+});
+const profileClient = createProfileAdminClient({
+  httpClient: profileHttpClient,
+});
+const workspaceClient = createWorkspaceAdminClient({
+  httpClient: workspaceHttpClient,
+});
+const paymentsClient = createPaymentsAdminClient({
+  httpClient: paymentsHttpClient,
+});
+const leapRequestsService = createLeapRequestsService({
+  paymentsClient,
+  identityClient,
+});
+const leapRequestsController = createLeapRequestsController({
+  leapRequestsService,
+});
+const leapRequestsRouter = createLeapRequestsRouter({
+  controller: leapRequestsController,
+  authenticate,
+});
 const userManagementService = createUserManagementService({
   identityClient,
   profileClient,
@@ -92,7 +117,8 @@ const userManagementController = createUserManagementController({
 const userManagementRouter = createUserManagementRouter({
   controller: userManagementController,
   authenticate,
-  validateUsersQuery: require("../middleware/userValidation").validateUsersQuery,
+  validateUsersQuery: require("../middleware/userValidation")
+    .validateUsersQuery,
   validateUserId: require("../middleware/userValidation").validateUserId,
 });
 const dashboardService = createDashboardService({
@@ -119,17 +145,25 @@ const settingsRouter = createSettingsRouter({
   validation: require("../middleware/settingsValidation"),
 });
 const verificationService = createVerificationService({ profileClient });
-const verificationController = createVerificationController({ verificationService });
+const verificationController = createVerificationController({
+  verificationService,
+});
 const verificationRouter = createVerificationRouter({
   controller: verificationController,
   authenticate,
 });
-const reportsService = createReportsService({ workspaceClient, paymentsClient });
+const reportsService = createReportsService({
+  workspaceClient,
+  paymentsClient,
+});
 const reportsController = createReportsController({ reportsService });
 const reportsRouter = createReportsRouter({
   controller: reportsController,
   authenticate,
 });
+const paymentsService = createAdminPaymentsService({ paymentsClient, workspaceClient, identityClient });
+const paymentsController = createAdminPaymentsController({ paymentsService });
+const paymentsRouter = createAdminPaymentsRouter({ controller: paymentsController, authenticate });
 
 module.exports = {
   health,
@@ -158,4 +192,10 @@ module.exports = {
   reportsService,
   reportsController,
   reportsRouter,
+  paymentsService,
+  paymentsController,
+  paymentsRouter,
+  leapRequestsService,
+  leapRequestsController,
+  leapRequestsRouter,
 };

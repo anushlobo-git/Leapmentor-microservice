@@ -13,10 +13,17 @@ const createInternalServiceAuth = require("../middleware/internalServiceAuth");
 const createConnectRequestPaymentRepository = require("../repositories/connectRequestPayment.repository");
 const createInternalPaymentController = require("../controllers/internalPayment.controller");
 const createInternalPaymentRouter = require("../routes/internalPayment.routes");
+const createFinanceRepository = require("../repositories/finance.repository");
+const createInternalFinanceController = require("../controllers/internalFinance.controller");
+const createInternalFinanceRouter = require("../routes/internalFinance.routes");
+const createInternalReminderController = require("../controllers/internalReminder.controller");
+const createInternalReminderRouter = require("../routes/internalReminder.routes");
 const createInternalAdminUserController = require("../controllers/internalAdminUser.controller");
 const createInternalAdminUserRouter = require("../routes/internalAdminUser.routes");
 const createInternalAdminStatsController = require("../controllers/internalAdminStats.controller");
 const createInternalAdminStatsRouter = require("../routes/internalAdminStats.routes");
+const createInternalAdminPaymentsController = require("../controllers/internalAdminPayments.controller");
+const createInternalAdminPaymentsRouter = require("../routes/internalAdminPayments.routes");
 const createReportRepository = require("../repositories/report.repository");
 const createInternalAdminReportsController = require("../controllers/internalAdminReports.controller");
 const createInternalAdminReportsRouter = require("../routes/internalAdminReports.routes");
@@ -94,7 +101,6 @@ const noteValidations = require("../middleware/noteValidation");
 const { createNoteUpload } = require("../middleware/noteUpload");
 const { getFileType } = require("../utils/fileType");
 
-
 const health = { isReady: () => db.isConnected() };
 const connectRequestRepository = createConnectRequestRepository(ConnectRequest);
 const availabilityBlockerRepository = createAvailabilityBlockerRepository({
@@ -125,15 +131,21 @@ const internalAdminStatsController = createInternalAdminStatsController({
 const internalAdminStatsRouter = createInternalAdminStatsRouter({
   controller: internalAdminStatsController,
 });
-const connectRequestPaymentRepository = createConnectRequestPaymentRepository(
-  ConnectRequest,
-);
+const internalAdminPaymentsController = createInternalAdminPaymentsController({
+  connectRequestRepository,
+});
+const internalAdminPaymentsRouter = createInternalAdminPaymentsRouter({
+  controller: internalAdminPaymentsController,
+});
+const connectRequestPaymentRepository =
+  createConnectRequestPaymentRepository(ConnectRequest);
 const internalPaymentController = createInternalPaymentController({
   connectRequestPaymentRepository,
 });
 const internalPaymentRouter = createInternalPaymentRouter({
   internalPaymentController,
 });
+const financeRepository = createFinanceRepository(ConnectRequest);
 const notificationsHttpClient = createInternalHttpClient({
   baseUrl: env.notificationsServiceUrl,
   serviceToken: env.notificationsServiceToken,
@@ -153,14 +165,6 @@ const notificationClient = createNotificationClient({
   outboxRepository,
 });
 const reportRepository = createReportRepository(Report);
-const internalAdminReportsController = createInternalAdminReportsController({
-  reportRepository,
-  connectRequestRepository,
-  notificationClient,
-});
-const internalAdminReportsRouter = createInternalAdminReportsRouter({
-  controller: internalAdminReportsController,
-});
 const profileHttpClient = createInternalHttpClient({
   baseUrl: env.profileServiceUrl,
   serviceToken: env.profileServiceToken,
@@ -183,8 +187,15 @@ const notificationRealtimeConsumer = createNotificationRealtimeConsumer({
   realtimePublisher,
   enabled: env.redisEnabled,
 });
-const connectRequestService = createConnectRequestService({ connectRequestRepository, notificationClient, profileClient, realtimePublisher });
-const connectRequestController = createConnectRequestController({ connectRequestService });
+const connectRequestService = createConnectRequestService({
+  connectRequestRepository,
+  notificationClient,
+  profileClient,
+  realtimePublisher,
+});
+const connectRequestController = createConnectRequestController({
+  connectRequestService,
+});
 const authenticate = createAuthenticate({ accessSecret: env.jwtAccessSecret });
 const connectRequestRouter = createConnectRequestRouter({
   controller: connectRequestController,
@@ -204,7 +215,13 @@ const slotLockRouter = createSlotLockRouter({
   validations: slotLockValidations,
 });
 const sessionRepository = createSessionRepository(ConnectRequest);
-const sessionService = createSessionService({ sessionRepository, notificationClient, profileClient, paymentsClient, realtimePublisher });
+const sessionService = createSessionService({
+  sessionRepository,
+  notificationClient,
+  profileClient,
+  paymentsClient,
+  realtimePublisher,
+});
 const sessionController = createSessionController({ sessionService });
 const sessionRouter = createSessionRouter({
   controller: sessionController,
@@ -212,9 +229,16 @@ const sessionRouter = createSessionRouter({
   validations: sessionValidations,
 });
 const messageRepository = createMessageRepository(Message);
-const messageService = createMessageService({ messageRepository, connectRequestRepository });
+const messageService = createMessageService({
+  messageRepository,
+  connectRequestRepository,
+});
 const messageController = createMessageController({ messageService });
-const messageRouter = createMessageRouter({ controller: messageController, authenticate, validations: messageValidations });
+const messageRouter = createMessageRouter({
+  controller: messageController,
+  authenticate,
+  validations: messageValidations,
+});
 const goalRepository = createGoalRepository(Goal);
 const milestoneRepository = createMilestoneRepository(Milestone);
 const goalService = createGoalService({
@@ -227,7 +251,11 @@ const goalService = createGoalService({
 });
 
 const goalController = createGoalController({ goalService });
-const goalRouter = createGoalRouter({ controller: goalController, authenticate, validations: goalValidations });
+const goalRouter = createGoalRouter({
+  controller: goalController,
+  authenticate,
+  validations: goalValidations,
+});
 const privateNoteRepository = createPrivateNoteRepository(PrivateNote);
 const privateNoteService = createPrivateNoteService({
   privateNoteRepository,
@@ -247,7 +275,34 @@ const identityHttpClient = createInternalHttpClient({
   timeoutMs: env.internalRequestTimeoutMs,
 });
 const identityClient = createIdentityClient({ httpClient: identityHttpClient });
-const mentorRatingClient = createMentorRatingClient({ httpClient: profileHttpClient });
+const internalAdminReportsController = createInternalAdminReportsController({
+  reportRepository,
+  connectRequestRepository,
+  notificationClient,
+  identityClient,
+});
+const internalAdminReportsRouter = createInternalAdminReportsRouter({
+  controller: internalAdminReportsController,
+});
+const internalReminderController = createInternalReminderController({
+  connectRequestRepository,
+  identityClient,
+});
+const internalReminderRouter = createInternalReminderRouter({
+  controller: internalReminderController,
+});
+const internalFinanceController = createInternalFinanceController({
+  financeRepository,
+  identityClient,
+  profileClient,
+  notificationClient,
+});
+const internalFinanceRouter = createInternalFinanceRouter({
+  controller: internalFinanceController,
+});
+const mentorRatingClient = createMentorRatingClient({
+  httpClient: profileHttpClient,
+});
 const feedbackRepository = createFeedbackRepository(Feedback);
 const feedbackService = createFeedbackService({
   feedbackRepository,
@@ -297,7 +352,6 @@ const noteRouter = createNoteRouter({
 });
 const socketAuth = createSocketAuth({ accessSecret: env.jwtAccessSecret });
 
-
 module.exports = {
   health,
   availabilityBlockerRepository,
@@ -307,11 +361,17 @@ module.exports = {
   connectRequestPaymentRepository,
   internalPaymentController,
   internalPaymentRouter,
+  internalFinanceController,
+  internalFinanceRouter,
+  internalReminderController,
+  internalReminderRouter,
   internalAdminUserController,
   internalAdminUserRouter,
   internalAdminServiceAuth,
   internalAdminStatsController,
   internalAdminStatsRouter,
+  internalAdminPaymentsController,
+  internalAdminPaymentsRouter,
   reportRepository,
   internalAdminReportsController,
   internalAdminReportsRouter,

@@ -1,9 +1,12 @@
 const http = require("node:http");
 const { Server } = require("socket.io");
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { createClient } = require("redis");
 
 const createApp = require("./app");
 const container = require("./container");
 const env = require("./config/env");
+const configureRedisAdapter = require("./socket/configureRedisAdapter");
 
 const app = createApp(container);
 const httpServer = http.createServer(app);
@@ -22,13 +25,33 @@ container.createMessageSocketHandler({
 
 let server;
 let notificationOutboxTimer;
+let socketRedisAdapter;
 
 const startServer = async () => {
+  try {
+    socketRedisAdapter = await configureRedisAdapter({
+      io,
+      enabled: env.redisEnabled,
+      url: env.redisUrl,
+      createClient,
+      createAdapter,
+    });
+  } catch (error) {
+    process.stderr.write(
+      `Socket.IO Redis adapter startup failed: ${error.message}\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   await container.notificationStreamPublisher?.connect().catch((error) => {
-    process.stderr.write(`Notification stream startup failed: ${error.message}\n`);
+    process.stderr.write(
+      `Notification stream startup failed: ${error.message}\n`,
+    );
   });
   await container.notificationRealtimeConsumer?.start().catch((error) => {
-    process.stderr.write(`Realtime notification startup failed: ${error.message}\n`);
+    process.stderr.write(
+      `Realtime notification startup failed: ${error.message}\n`,
+    );
   });
   try {
     const connected = await container.database.connectDatabase();
@@ -38,20 +61,28 @@ const startServer = async () => {
       );
     } else {
       await container.notificationClient?.drain().catch((error) => {
-        process.stderr.write(`Notification outbox drain failed: ${error.message}\n`);
+        process.stderr.write(
+          `Notification outbox drain failed: ${error.message}\n`,
+        );
       });
       notificationOutboxTimer = setInterval(() => {
         container.notificationClient?.drain().catch((error) => {
-          process.stderr.write(`Notification outbox retry failed: ${error.message}\n`);
+          process.stderr.write(
+            `Notification outbox retry failed: ${error.message}\n`,
+          );
         });
       }, 5000);
       notificationOutboxTimer.unref?.();
     }
     server = httpServer.listen(env.port, () => {
-      process.stdout.write(`${env.serviceName} service listening on port ${env.port}\n`);
+      process.stdout.write(
+        `${env.serviceName} service listening on port ${env.port}\n`,
+      );
     });
   } catch (error) {
-    process.stderr.write(`Workspace database startup failed: ${error.message}\n`);
+    process.stderr.write(
+      `Workspace database startup failed: ${error.message}\n`,
+    );
     process.exitCode = 1;
   }
 };
@@ -59,9 +90,18 @@ const startServer = async () => {
 const shutdown = (signal) => {
   process.stdout.write(`${signal} received; shutting down\n`);
 
-  if (!server) return process.exit(0);
+  if (!server) {
+    socketRedisAdapter?.close().finally(() => process.exit());
+    return;
+  }
   if (notificationOutboxTimer) clearInterval(notificationOutboxTimer);
   io.close();
+  socketRedisAdapter?.close().catch((error) => {
+    process.stderr.write(
+      `Socket.IO Redis adapter shutdown failed: ${error.message}\n`,
+    );
+    process.exitCode = 1;
+  });
   container.notificationRealtimeConsumer?.stop().catch(() => null);
   server.close((error) => {
     container.notificationStreamPublisher?.close().catch((closeError) => {
