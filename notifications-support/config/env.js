@@ -13,7 +13,7 @@ module.exports = {
   ),
   redisUrl: getEnv("REDIS_URL", "redis://localhost:6379"),
   redisEnabled: getEnv("REDIS_ENABLED", "false") === "true",
-  notificationStreamName: getEnv("NOTIFICATION_STREAM_NAME", "leapmentor.notifications"),
+  notificationStreamName: getEnv("NOTIFICATION_STREAM_NAME", "leapmentor.workspace.events"),
   notificationConsumerGroup: getEnv("NOTIFICATION_CONSUMER_GROUP", "notifications-support"),
   notificationConsumerName: getEnv("NOTIFICATION_CONSUMER_NAME", `notifications-${process.pid}`),
   jwtAccessSecret: getEnv("JWT_ACCESS_SECRET", "development-access-secret"),

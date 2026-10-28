@@ -20,6 +20,7 @@ container.createMessageSocketHandler({
 });
 
 let server;
+let notificationOutboxTimer;
 
 const startServer = async () => {
   await container.notificationStreamPublisher?.connect().catch((error) => {
@@ -31,6 +32,16 @@ const startServer = async () => {
       process.stderr.write(
         "MONGO_URI is not configured; Workspace will remain not ready\n",
       );
+    } else {
+      await container.notificationClient?.drain().catch((error) => {
+        process.stderr.write(`Notification outbox drain failed: ${error.message}\n`);
+      });
+      notificationOutboxTimer = setInterval(() => {
+        container.notificationClient?.drain().catch((error) => {
+          process.stderr.write(`Notification outbox retry failed: ${error.message}\n`);
+        });
+      }, 5000);
+      notificationOutboxTimer.unref?.();
     }
     server = httpServer.listen(env.port, () => {
       process.stdout.write(`${env.serviceName} service listening on port ${env.port}\n`);
@@ -45,6 +56,7 @@ const shutdown = (signal) => {
   process.stdout.write(`${signal} received; shutting down\n`);
 
   if (!server) return process.exit(0);
+  if (notificationOutboxTimer) clearInterval(notificationOutboxTimer);
   io.close();
   server.close((error) => {
     container.notificationStreamPublisher?.close().catch((closeError) => {

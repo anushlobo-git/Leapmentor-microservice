@@ -108,6 +108,14 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.goalRouter) {
+    app.use(
+      "/api/v1/goals",
+      createRequireReady(container),
+      container.goalRouter,
+    );
+  }
+
   app.use(errorHandler);
 
   return app;

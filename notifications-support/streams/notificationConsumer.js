@@ -29,7 +29,14 @@ const createNotificationConsumer = ({ client, streamName, groupName, consumerNam
   const processRecords = async (records) => {
     for (const record of records) {
       try {
-        await notificationService.createFromEvent(JSON.parse(record.message.payload));
+        const parsed = JSON.parse(record.message.payload);
+        // New records use the shared envelope. The fallback keeps older records
+        // readable while the stream is being migrated.
+        const event = parsed?.payload && parsed?.eventId ? {
+          ...parsed.payload,
+          sourceEventId: parsed.payload.sourceEventId || parsed.eventId,
+        } : parsed;
+        await notificationService.createFromEvent(event);
         await client.xAck(streamName, groupName, record.id);
       } catch (error) {
         process.stderr.write(`Notification event processing failed: ${error.message}\n`);

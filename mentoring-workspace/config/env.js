@@ -13,7 +13,7 @@ module.exports = {
   ),
   redisUrl: getEnv("REDIS_URL", "redis://localhost:6379"),
   redisEnabled: getEnv("REDIS_ENABLED", "false") === "true",
-  notificationStreamName: getEnv("NOTIFICATION_STREAM_NAME", "leapmentor.notifications"),
+  notificationStreamName: getEnv("NOTIFICATION_STREAM_NAME", "leapmentor.workspace.events"),
   clientUrl: getEnv("CLIENT_URL", "http://localhost:5173"),
   internalServiceToken: getEnv("WORKSPACE_SERVICE_TOKEN", ""),
   adminServiceToken: getEnv("ADMIN_SERVICE_TOKEN", ""),

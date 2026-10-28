@@ -3,6 +3,9 @@ const db = require("../config/db");
 const ConnectRequest = require("../models/ConnectRequest");
 const Report = require("../models/Report");
 const SlotLock = require("../models/SlotLock");
+const OutboxEvent = require("../models/OutboxEvent");
+const Goal = require("../models/Goal");
+const Milestone = require("../models/Milestone");
 const createAvailabilityBlockerRepository = require("../repositories/availabilityBlocker.repository");
 const createInternalAvailabilityController = require("../controllers/internalAvailability.controller");
 const createInternalAvailabilityRouter = require("../routes/internalAvailability.routes");
@@ -46,6 +49,13 @@ const { createClient } = require("redis");
 const createNotificationStreamPublisher = require("../clients/notificationStream");
 const createSocketAuth = require("../socket/socketAuth");
 const createMessageSocketHandler = require("../socket/messageSocket");
+const createOutboxRepository = require("../repositories/outbox.repository");
+const createGoalRepository = require("../repositories/goal.repository");
+const createMilestoneRepository = require("../repositories/milestone.repository");
+const createGoalService = require("../services/goal.service");
+const createGoalController = require("../controllers/goal.controller");
+const createGoalRouter = require("../routes/goal.routes");
+const goalValidations = require("../middleware/goalValidation");
 
 const health = { isReady: () => db.isConnected() };
 const connectRequestRepository = createConnectRequestRepository(ConnectRequest);
@@ -97,10 +107,12 @@ const notificationStreamPublisher = createNotificationStreamPublisher({
   streamName: env.notificationStreamName,
   enabled: env.redisEnabled,
 });
+const outboxRepository = createOutboxRepository(OutboxEvent);
 const notificationClient = createNotificationClient({
   httpClient: notificationsHttpClient,
   serviceToken: env.notificationsServiceToken,
   streamPublisher: env.redisEnabled ? notificationStreamPublisher : null,
+  outboxRepository,
 });
 const reportRepository = createReportRepository(Report);
 const internalAdminReportsController = createInternalAdminReportsController({
@@ -143,6 +155,11 @@ const messageRepository = createMessageRepository(Message);
 const messageService = createMessageService({ messageRepository, connectRequestRepository });
 const messageController = createMessageController({ messageService });
 const messageRouter = createMessageRouter({ controller: messageController, authenticate, validations: messageValidations });
+const goalRepository = createGoalRepository(Goal);
+const milestoneRepository = createMilestoneRepository(Milestone);
+const goalService = createGoalService({ connectRequestRepository, goalRepository, milestoneRepository });
+const goalController = createGoalController({ goalService });
+const goalRouter = createGoalRouter({ controller: goalController, authenticate, validations: goalValidations });
 const socketAuth = createSocketAuth({ accessSecret: env.jwtAccessSecret });
 
 module.exports = {
@@ -178,9 +195,15 @@ module.exports = {
   messageService,
   messageController,
   messageRouter,
+  goalRepository,
+  milestoneRepository,
+  goalService,
+  goalController,
+  goalRouter,
   notificationsHttpClient,
   notificationClient,
   notificationStreamPublisher,
+  outboxRepository,
   socketAuth,
   createMessageSocketHandler,
   database: db,

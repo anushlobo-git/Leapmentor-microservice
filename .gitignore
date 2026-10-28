@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+!**/.env.example
 
 # Logs and runtime output
 *.log
@@ -17,6 +18,14 @@ coverage/
 # Build output
 dist/
 build/
+
+# Local developer helpers and notes
+/README.md
+start-local.sh
+setup-local-env.sh
+build-images.sh
+COMMUNICATION.md
+CONTAINER_BUILD.md
 
 # OS/editor files
 .DS_Store
