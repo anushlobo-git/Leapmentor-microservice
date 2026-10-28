@@ -28,7 +28,16 @@ const createNotificationConsumer = require("../streams/notificationConsumer");
 
 const health = { isReady: () => db.isConnected() };
 const notificationRepository = createNotificationRepository(Notification);
-const notificationService = createNotificationService({ notificationRepository });
+const notificationEventRedisClient = createClient({ url: env.redisUrl });
+const notificationEventPublisher = {
+  publish: async (event) => {
+    if (!env.redisEnabled) return { delivered: false, skipped: true };
+    if (!notificationEventRedisClient.isOpen) await notificationEventRedisClient.connect();
+    await notificationEventRedisClient.xAdd(env.notificationEventsStreamName, "*", { payload: JSON.stringify(event) });
+    return { delivered: true };
+  },
+};
+const notificationService = createNotificationService({ notificationRepository, eventPublisher: notificationEventPublisher });
 const notificationController = createNotificationController({ notificationService });
 const authenticate = createAuthenticate({ accessSecret: env.jwtAccessSecret });
 const notificationRouter = createNotificationRouter({
@@ -72,6 +81,7 @@ module.exports = {
   internalNotificationController,
   internalNotificationRouter,
   notificationConsumer,
+  notificationEventRedisClient,
   supportMessageRepository,
   supportMessageService,
   supportController,

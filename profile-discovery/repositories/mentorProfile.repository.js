@@ -34,6 +34,25 @@ const createMentorProfileRepository = (MentorProfile) => {
       { new: true, runValidators: true },
     );
 
+  const updateAverageRating = (userId, avgRating) =>
+    MentorProfile.findOneAndUpdate(
+      { user: userId },
+      { $set: { avgRating } },
+      { new: true, runValidators: true },
+    ).lean();
+
+  const findSimilarPublishedMentors = (userId, skills, limit = 20) =>
+    MentorProfile.find({
+      user: { $ne: userId },
+      isProfilePublished: { $ne: false },
+      isProfileComplete: true,
+      skills: { $in: skills },
+    })
+      .select("user currentRole industry company bio profilePicture yearsOfExperience hourlyRate avgRating totalSessions skills communicationPreferences languages linkedInUrl portfolioUrl isProfileComplete isProfilePublished verificationStatus createdAt updatedAt")
+      .sort({ avgRating: -1, totalSessions: -1, _id: 1 })
+      .limit(limit)
+      .lean();
+
   const saveMentorProfile = (profile) => profile.save();
 
   return {
@@ -45,6 +64,8 @@ const createMentorProfileRepository = (MentorProfile) => {
     findPublishedByUserId,
     create,
     findOneAndUpdateByUserId,
+    updateAverageRating,
+    findSimilarPublishedMentors,
     saveMentorProfile,
   };
 };

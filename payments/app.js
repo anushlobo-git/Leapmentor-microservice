@@ -52,6 +52,15 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.internalEscrowRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/escrow",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalEscrowRouter,
+    );
+  }
+
   if (container.walletRouter) {
     app.use(
       "/api/v1/escrow",

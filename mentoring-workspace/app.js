@@ -116,6 +116,22 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.feedbackRouter) {
+    app.use(
+      "/api/v1/feedback",
+      createRequireReady(container),
+      container.feedbackRouter,
+    );
+  }
+
+  if (container.reportRouter) {
+    app.use(
+      "/api/v1/reports",
+      createRequireReady(container),
+      container.reportRouter,
+    );
+  }
+
     if (container.privateNoteRouter) {
       app.use(
         "/api/v1/private-notes",

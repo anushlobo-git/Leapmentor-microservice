@@ -13,7 +13,7 @@ const NOTIFICATION_TYPES = new Set([
   "support_resolved",
 ]);
 
-const createNotificationService = ({ notificationRepository }) => {
+const createNotificationService = ({ notificationRepository, eventPublisher = null }) => {
   const getRecipientNotifications = async (recipientId) => {
     const notifications = await notificationRepository.findByRecipientLimit(
       recipientId,
@@ -68,6 +68,14 @@ const createNotificationService = ({ notificationRepository }) => {
       title: String(title).trim(),
       message: String(message).trim(),
       metadata: metadata && typeof metadata === "object" ? metadata : {},
+    });
+    await eventPublisher?.publish({
+      eventId: sourceEventId,
+      eventType: "notification.created",
+      schemaVersion: 1,
+      occurredAt: new Date().toISOString(),
+      producer: "notifications-support",
+      payload: { recipient, notification: toNotificationDTO(notification) },
     });
     return { notification: toNotificationDTO(notification), deduplicated: false };
   };

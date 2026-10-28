@@ -129,6 +129,7 @@ const createEscrowService = ({
   const release = async ({ requestId, menteeId, correlationId }) => {
     const context = await getContext(requestId, correlationId);
     if (idOf(context.mentee) !== idOf(menteeId)) throw new AppError("Only the mentee can confirm session completion", 403);
+    if (context.status === "completed") return { status: "completed", alreadyReleased: true, totalAmount: Number(context.totalAmount || 0) };
     if (context.status !== "ongoing") throw new AppError(`Release only allowed on ongoing sessions. Current status: ${context.status}`, 400);
     if (context.paymentStatus !== "paid") throw new AppError("No escrowed payment found for this session", 400);
     const total = Number(context.totalAmount || 0);

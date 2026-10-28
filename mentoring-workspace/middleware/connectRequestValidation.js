@@ -28,4 +28,12 @@ const validateResponse = (req, _res, next) => {
   } catch (error) { return next(error); }
 };
 
-module.exports = { validateId, validateCreate, validateResponse };
+const validateRefer = (req, _res, next) => {
+  try {
+    if (!OBJECT_ID.test(String(req.params.id))) throw invalid("id must be a valid ObjectId");
+    if (!OBJECT_ID.test(String(req.body?.referToMentorId || ""))) throw invalid("referToMentorId must be a valid ObjectId");
+    return next();
+  } catch (error) { return next(error); }
+};
+
+module.exports = { validateId, validateCreate, validateResponse, validateRefer };

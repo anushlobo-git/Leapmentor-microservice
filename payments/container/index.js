@@ -21,6 +21,9 @@ const createInternalSettingsController = require("../controllers/internalSetting
 const createInternalSettingsRouter = require("../routes/internalSettings.routes");
 const createInternalRefundController = require("../controllers/internalRefund.controller");
 const createInternalRefundRouter = require("../routes/internalRefund.routes");
+const createInternalEscrowController = require("../controllers/internalEscrow.controller");
+const createInternalEscrowRouter = require("../routes/internalEscrow.routes");
+const internalEscrowValidation = require("../middleware/internalEscrowValidation");
 const createPlatformSettingsService = require("../services/platformSettings.service");
 const escrowValidations = require("../middleware/escrowValidation");
 const createInternalHttpClient = require("../clients/internalHttpClient");
@@ -77,6 +80,8 @@ const internalSettingsController = createInternalSettingsController({ platformSe
 const internalSettingsRouter = createInternalSettingsRouter({ controller: internalSettingsController });
 const internalRefundController = createInternalRefundController({ escrowService });
 const internalRefundRouter = createInternalRefundRouter({ controller: internalRefundController });
+const internalEscrowController = createInternalEscrowController({ escrowService });
+const internalEscrowRouter = createInternalEscrowRouter({ controller: internalEscrowController, validate: internalEscrowValidation });
 
 module.exports = {
   health,
@@ -91,6 +96,7 @@ module.exports = {
   internalServiceAuth,
   internalSettingsRouter,
   internalRefundRouter,
+  internalEscrowRouter,
   platformSettingsService,
   database: db,
 };

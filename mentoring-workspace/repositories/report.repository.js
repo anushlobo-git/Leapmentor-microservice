@@ -1,4 +1,7 @@
 const createReportRepository = (Report) => ({
+  create: (data) => Report.create(data),
+  findReportByConnectAndReporter: (connectRequest, reportedBy) =>
+    Report.findOne({ connectRequest, reportedBy }).lean(),
   countAllReports: () => Report.countDocuments(),
   countReportsByFilter: (filter) => Report.countDocuments(filter),
   findReports: (filter, { skip, limit }) =>

@@ -35,6 +35,7 @@ const shutdown = (signal) => {
       process.stderr.write(`${closeError.message}\n`);
       process.exitCode = 1;
     });
+    container.notificationEventRedisClient?.quit().catch(() => null);
     if (error) {
       process.stderr.write(`${error.message}\n`);
       process.exitCode = 1;

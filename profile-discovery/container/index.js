@@ -56,6 +56,11 @@ const { cloudinary, configured: cloudinaryConfigured } = require("../config/clou
 const streamifier = require("streamifier");
 const { google } = require("googleapis");
 const createCalendarStateService = require("../utils/calendarState.service");
+const createInternalMentorRatingController = require("../controllers/internalMentorRating.controller");
+const createInternalMentorRatingRouter = require("../routes/internalMentorRating.routes");
+const validateInternalMentorRating = require("../middleware/internalMentorRatingValidation");
+const createInternalMentorLookupController = require("../controllers/internalMentorLookup.controller");
+const createInternalMentorLookupRouter = require("../routes/internalMentorLookup.routes");
 
 const health = { isReady: () => db.isConnected() };
 
@@ -178,6 +183,25 @@ const internalAdminProfileRouter = createInternalAdminProfileRouter({
 const internalAdminServiceAuth = createInternalServiceAuth({
   serviceToken: env.adminServiceToken,
 });
+const internalServiceAuth = createInternalServiceAuth({
+  serviceToken: env.profileServiceToken,
+});
+const internalMentorRatingController = createInternalMentorRatingController({
+  mentorProfileRepository,
+});
+const internalMentorRatingRouter = createInternalMentorRatingRouter({
+  controller: internalMentorRatingController,
+  validate: validateInternalMentorRating,
+});
+const internalMentorLookupController = createInternalMentorLookupController({
+  mentorProfileRepository,
+  identityClient,
+  availabilityService,
+  toMentorSearchDTO: require("../utils/mentorSearch.mapper").toMentorSearchDTO,
+});
+const internalMentorLookupRouter = createInternalMentorLookupRouter({
+  controller: internalMentorLookupController,
+});
 const internalAdminStatsController = createInternalAdminStatsController({
   adminProfileRepository,
 });
@@ -220,6 +244,11 @@ module.exports = {
   internalAdminProfileController,
   internalAdminProfileRouter,
   internalAdminServiceAuth,
+  internalServiceAuth,
+  internalMentorRatingController,
+  internalMentorRatingRouter,
+  internalMentorLookupController,
+  internalMentorLookupRouter,
   internalAdminStatsController,
   internalAdminStatsRouter,
   internalAdminVerificationController,

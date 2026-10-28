@@ -60,6 +60,13 @@ const createConnectRequestRepository = (ConnectRequest) => {
   const deleteRequest = (id, mentee) =>
     ConnectRequest.deleteOne({ _id: id, mentee });
 
+  const markReferred = (id, mentor, update) =>
+    ConnectRequest.findOneAndUpdate(
+      { _id: id, mentor, status: "pending" },
+      { $set: update },
+      { new: true, runValidators: true },
+    ).lean();
+
   return {
     createRequest,
     findPendingRequest,
@@ -73,6 +80,7 @@ const createConnectRequestRepository = (ConnectRequest) => {
     updatePendingResponse,
     updateMenteeRequest,
     deleteRequest,
+    markReferred,
   };
 };
 

@@ -14,7 +14,7 @@ const toDTO = (request) => ({
   mentor: request.mentor?.toString?.() || request.mentor,
 });
 
-const createConnectRequestService = ({ connectRequestRepository, notificationClient = { publish: async () => null } }) => {
+const createConnectRequestService = ({ connectRequestRepository, notificationClient = { publish: async () => null }, profileClient = null, realtimePublisher = null }) => {
   const publish = (event) => notificationClient.publish(event).catch(() => null);
   const validateSlots = (selectedSlots) => {
     if (!Array.isArray(selectedSlots) || selectedSlots.length < 1) {
@@ -67,6 +67,14 @@ const createConnectRequestService = ({ connectRequestRepository, notificationCli
       message: "You received a new mentoring request.",
       metadata: { requestId: request._id, mentorId, menteeId },
     });
+    realtimePublisher?.publishToUser?.(mentorId, "new_connect_request", {
+      requestId: request._id,
+      status: "pending",
+    });
+    realtimePublisher?.publishToUser?.(mentorId, "request_status_changed", {
+      requestId: request._id,
+      status: "pending",
+    });
     return toDTO(request);
   };
 
@@ -99,6 +107,14 @@ const createConnectRequestService = ({ connectRequestRepository, notificationCli
       message: status === "accepted" ? "Your mentoring request was accepted." : "Your mentoring request was declined.",
       metadata: { requestId, mentorId, menteeId: request.mentee },
     });
+    realtimePublisher?.publishToUser?.(request.mentee, status === "accepted" ? "request_accepted" : "request_declined", {
+      requestId,
+      status,
+    });
+    realtimePublisher?.publishToUser?.(request.mentee, "request_status_changed", {
+      requestId,
+      status,
+    });
     return toDTO(request);
   };
 
@@ -122,7 +138,45 @@ const createConnectRequestService = ({ connectRequestRepository, notificationCli
     return { ...toDTO(request), viewerRole: String(request.mentee) === String(userId) ? "mentee" : "mentor" };
   };
 
-  return { sendConnectRequest, getMyRequests, getIncomingRequests, respondToRequest, cancelRequest, getOngoingConnects, getConnectDetail };
+  const getSimilarMentors = async (requestId, userId, correlationId) => {
+    const request = await connectRequestRepository.findById(requestId);
+    if (!request) throw new AppError("Request not found", 404, "REQUEST_NOT_FOUND");
+    if (String(request.mentor) !== String(userId)) throw new AppError("Not authorized to look up alternatives", 403, "NOT_REQUEST_PARTICIPANT");
+    if (!profileClient) return { mentors: [], mySkills: [] };
+    return profileClient.getSimilarMentors(userId, correlationId);
+  };
+
+  const referRequest = async (requestId, mentorUserId, body, correlationId) => {
+    const referToMentorId = body?.referToMentorId;
+    if (!referToMentorId) throw new AppError("referToMentorId is required", 400, "MENTOR_REQUIRED");
+    const request = await connectRequestRepository.findById(requestId);
+    if (!request) throw new AppError("Request not found", 404, "REQUEST_NOT_FOUND");
+    if (String(request.mentor) !== String(mentorUserId)) throw new AppError("Not authorized to refer this request", 403, "NOT_REQUEST_OWNER");
+    if (request.status !== "pending") throw new AppError(`Cannot refer a request that is already ${request.status}`, 400, "REQUEST_NOT_PENDING");
+    if (String(referToMentorId) === String(mentorUserId)) throw new AppError("Cannot refer request to yourself", 400, "SELF_REFERRAL");
+    if (await connectRequestRepository.findPendingRequest(request.mentee, referToMentorId)) throw new AppError("Mentee already has a pending request with this mentor", 409, "PENDING_REQUEST_EXISTS");
+    const newRequest = await connectRequestRepository.createRequest({
+      mentee: request.mentee, mentor: referToMentorId, message: request.message,
+      selectedSlots: request.selectedSlots, requestedAt: new Date(),
+      referredBy: mentorUserId, sessionRate: request.sessionRate,
+      sessionCount: request.sessionCount, totalAmount: request.totalAmount,
+      status: "pending", paymentStatus: "unpaid",
+    });
+    const original = await connectRequestRepository.markReferred(requestId, mentorUserId, {
+      status: "referred", referredTo: referToMentorId,
+      referredRequestId: newRequest._id, respondedAt: new Date(),
+    });
+    if (!original) throw new AppError("Request was already updated", 409, "REQUEST_NOT_PENDING");
+    await publish({ sourceEventId: `workspace.connect-request:${requestId}:referred`, recipient: request.mentee, type: "connect_request_referred", title: "Request referred", message: "Your request was referred to another mentor.", metadata: { requestId, referredRequestId: newRequest._id } });
+    await publish({ sourceEventId: `workspace.connect-request:${newRequest._id}:received`, recipient: referToMentorId, type: "connect_request_received", title: "New Connect Request (Referred)", message: "You received a referred connect request.", metadata: { requestId: newRequest._id, referredBy: mentorUserId } });
+    realtimePublisher?.publishToUser?.(request.mentee, "request_referred", { requestId, status: "referred" });
+    realtimePublisher?.publishToUser?.(request.mentee, "request_status_changed", { requestId, status: "referred" });
+    realtimePublisher?.publishToUser?.(referToMentorId, "new_connect_request", { requestId: newRequest._id, status: "pending" });
+    realtimePublisher?.publishToUser?.(referToMentorId, "request_status_changed", { requestId: newRequest._id, status: "pending" });
+    return { originalRequest: toDTO(original), newRequest: toDTO(newRequest) };
+  };
+
+  return { sendConnectRequest, getMyRequests, getIncomingRequests, respondToRequest, cancelRequest, getOngoingConnects, getConnectDetail, getSimilarMentors, referRequest };
 };
 
 module.exports = createConnectRequestService;

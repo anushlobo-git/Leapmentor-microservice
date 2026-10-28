@@ -8,6 +8,8 @@ const createConnectRequestRouter = ({ controller, authenticate, validations }) =
   router.get("/incoming", controller.incoming);
   router.get("/ongoing", controller.ongoing);
   router.get("/:id/detail", validations.validateId, controller.detail);
+  router.get("/:id/similar-mentors", validations.validateId, controller.similarMentors);
+  router.patch("/:id/refer", validations.validateRefer, controller.refer);
   router.patch("/:id", validations.validateResponse, controller.respond);
   router.delete("/:id", validations.validateId, controller.cancel);
   return router;

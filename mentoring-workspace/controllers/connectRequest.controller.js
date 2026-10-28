@@ -41,7 +41,13 @@ const createConnectRequestController = ({ connectRequestService }) => {
       return res.status(200).json({ success: true, data: { connect }, message: "Connect details retrieved" });
     } catch (error) { return next(error); }
   };
-  return { send, myRequests, incoming, respond, cancel, ongoing, detail };
+  const similarMentors = async (req, res, next) => {
+    try { return res.status(200).json({ success: true, data: await connectRequestService.getSimilarMentors(req.params.id, req.user._id, req.correlationId), message: "Similar mentors retrieved" }); } catch (error) { return next(error); }
+  };
+  const refer = async (req, res, next) => {
+    try { return res.status(200).json({ success: true, data: await connectRequestService.referRequest(req.params.id, req.user._id, req.body, req.correlationId), message: "Request referred successfully" }); } catch (error) { return next(error); }
+  };
+  return { send, myRequests, incoming, respond, cancel, ongoing, detail, similarMentors, refer };
 };
 
 module.exports = createConnectRequestController;

@@ -102,6 +102,24 @@ const createApp = (container = {}) => {
     );
   }
 
+  if (container.internalMentorRatingRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/mentors",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalMentorRatingRouter,
+    );
+  }
+
+  if (container.internalMentorLookupRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/mentors",
+      container.internalServiceAuth,
+      createRequireReady(container),
+      container.internalMentorLookupRouter,
+    );
+  }
+
   app.use(errorHandler);
 
   return app;

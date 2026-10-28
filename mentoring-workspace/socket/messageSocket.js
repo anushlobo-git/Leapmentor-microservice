@@ -26,8 +26,10 @@ const createMessageSocketHandler = ({ io, messageService, messageRepository, con
       socket.join(connectRequestId);
       socket.currentRoom = connectRequestId;
       if (!onlineUsers.has(connectRequestId)) onlineUsers.set(connectRequestId, new Set());
+      const existingUsers = [...onlineUsers.get(connectRequestId)];
       onlineUsers.get(connectRequestId).add(userId);
       socket.to(connectRequestId).emit("user_online", { userId });
+      for (const existingUserId of existingUsers) socket.emit("user_online", { userId: existingUserId });
 
       const readAt = new Date();
       await messageRepository.markMessagesAsRead(connectRequestId, userId);

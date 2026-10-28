@@ -4,6 +4,7 @@ const createSessionRouter = ({ controller, authenticate, validations }) => {
   const router = express.Router();
   router.use(authenticate);
   router.get("/:connectRequestId/slots", validations.requestId, controller.getSlots);
+  router.get("/:connectRequestId/mentor-availability", validations.requestId, controller.getMentorAvailability);
   router.patch("/:connectRequestId/slots/:slotIndex/meeting-link", validations.requestId, validations.slotIndex, validations.meetingLink, controller.setMeetingLink);
   router.patch("/:connectRequestId/slots/:slotIndex/mark-complete", validations.requestId, validations.slotIndex, controller.markSlotComplete);
   router.post("/:connectRequestId/add-slot", validations.requestId, validations.slotBody, controller.addSlot);

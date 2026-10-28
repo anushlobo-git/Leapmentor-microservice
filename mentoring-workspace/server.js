@@ -27,6 +27,9 @@ const startServer = async () => {
   await container.notificationStreamPublisher?.connect().catch((error) => {
     process.stderr.write(`Notification stream startup failed: ${error.message}\n`);
   });
+  await container.notificationRealtimeConsumer?.start().catch((error) => {
+    process.stderr.write(`Realtime notification startup failed: ${error.message}\n`);
+  });
   try {
     const connected = await container.database.connectDatabase();
     if (!connected) {
@@ -59,6 +62,7 @@ const shutdown = (signal) => {
   if (!server) return process.exit(0);
   if (notificationOutboxTimer) clearInterval(notificationOutboxTimer);
   io.close();
+  container.notificationRealtimeConsumer?.stop().catch(() => null);
   server.close((error) => {
     container.notificationStreamPublisher?.close().catch((closeError) => {
       process.stderr.write(`${closeError.message}\n`);

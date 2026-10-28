@@ -50,6 +50,7 @@ const createNotificationStreamPublisher = require("../clients/notificationStream
 const createSocketAuth = require("../socket/socketAuth");
 const createMessageSocketHandler = require("../socket/messageSocket");
 const createRealtimePublisher = require("../socket/realtimePublisher");
+const createNotificationRealtimeConsumer = require("../socket/notificationConsumer");
 const createOutboxRepository = require("../repositories/outbox.repository");
 const createGoalRepository = require("../repositories/goal.repository");
 const createMilestoneRepository = require("../repositories/milestone.repository");
@@ -72,6 +73,20 @@ const Note = require("../models/Note");
 const createNoteRepository = require("../repositories/note.repository");
 const createCloudinaryClient = require("../clients/cloudinaryClient");
 const createIdentityClient = require("../clients/identityClient");
+const createMentorRatingClient = require("../clients/mentorRatingClient");
+const createProfileClient = require("../clients/profileClient");
+const createPaymentsClient = require("../clients/paymentsClient");
+const Feedback = require("../models/Feedback");
+const createFeedbackRepository = require("../repositories/feedback.repository");
+const createFeedbackService = require("../services/feedback.service");
+const createFeedbackController = require("../controllers/feedback.controller");
+const createFeedbackRouter = require("../routes/feedback.routes");
+const feedbackValidations = require("../middleware/feedbackValidation");
+const createReportService = require("../services/report.service");
+const createReportController = require("../controllers/report.controller");
+const createReportRouter = require("../routes/report.routes");
+const reportValidations = require("../middleware/reportValidation");
+const reportUpload = require("../middleware/reportUpload");
 const createNoteService = require("../services/note.service");
 const createNoteController = require("../controllers/note.controller");
 const createNoteRouter = require("../routes/note.routes");
@@ -146,7 +161,29 @@ const internalAdminReportsController = createInternalAdminReportsController({
 const internalAdminReportsRouter = createInternalAdminReportsRouter({
   controller: internalAdminReportsController,
 });
-const connectRequestService = createConnectRequestService({ connectRequestRepository, notificationClient });
+const profileHttpClient = createInternalHttpClient({
+  baseUrl: env.profileServiceUrl,
+  serviceToken: env.profileServiceToken,
+  timeoutMs: env.internalRequestTimeoutMs,
+});
+const profileClient = createProfileClient({ httpClient: profileHttpClient });
+const paymentsHttpClient = createInternalHttpClient({
+  baseUrl: env.paymentsServiceUrl,
+  serviceToken: env.paymentsServiceToken,
+  timeoutMs: env.internalRequestTimeoutMs,
+});
+const paymentsClient = createPaymentsClient({ httpClient: paymentsHttpClient });
+const realtimePublisher = createRealtimePublisher();
+const realtimeRedisClient = createClient({ url: env.redisUrl });
+const notificationRealtimeConsumer = createNotificationRealtimeConsumer({
+  client: realtimeRedisClient,
+  streamName: env.notificationEventsStreamName,
+  groupName: env.notificationEventsConsumerGroup,
+  consumerName: env.notificationEventsConsumerName,
+  realtimePublisher,
+  enabled: env.redisEnabled,
+});
+const connectRequestService = createConnectRequestService({ connectRequestRepository, notificationClient, profileClient, realtimePublisher });
 const connectRequestController = createConnectRequestController({ connectRequestService });
 const authenticate = createAuthenticate({ accessSecret: env.jwtAccessSecret });
 const connectRequestRouter = createConnectRequestRouter({
@@ -167,7 +204,7 @@ const slotLockRouter = createSlotLockRouter({
   validations: slotLockValidations,
 });
 const sessionRepository = createSessionRepository(ConnectRequest);
-const sessionService = createSessionService({ sessionRepository, notificationClient });
+const sessionService = createSessionService({ sessionRepository, notificationClient, profileClient, paymentsClient, realtimePublisher });
 const sessionController = createSessionController({ sessionService });
 const sessionRouter = createSessionRouter({
   controller: sessionController,
@@ -180,12 +217,13 @@ const messageController = createMessageController({ messageService });
 const messageRouter = createMessageRouter({ controller: messageController, authenticate, validations: messageValidations });
 const goalRepository = createGoalRepository(Goal);
 const milestoneRepository = createMilestoneRepository(Milestone);
-const realtimePublisher = createRealtimePublisher();
 const goalService = createGoalService({
   connectRequestRepository,
   goalRepository,
   milestoneRepository,
   realtimePublisher,
+  notificationRealtimeConsumer,
+  realtimeRedisClient,
 });
 
 const goalController = createGoalController({ goalService });
@@ -209,10 +247,38 @@ const identityHttpClient = createInternalHttpClient({
   timeoutMs: env.internalRequestTimeoutMs,
 });
 const identityClient = createIdentityClient({ httpClient: identityHttpClient });
+const mentorRatingClient = createMentorRatingClient({ httpClient: profileHttpClient });
+const feedbackRepository = createFeedbackRepository(Feedback);
+const feedbackService = createFeedbackService({
+  feedbackRepository,
+  connectRequestRepository,
+  identityClient,
+  profileClient,
+  paymentsClient,
+  mentorRatingClient,
+});
+const feedbackController = createFeedbackController({ feedbackService });
+const feedbackRouter = createFeedbackRouter({
+  controller: feedbackController,
+  authenticate,
+  validations: feedbackValidations,
+});
 const cloudinaryClient = createCloudinaryClient({
   cloudinary,
   streamifier,
   configured: cloudinaryConfigured,
+});
+const reportService = createReportService({
+  reportRepository,
+  connectRequestRepository,
+  cloudinaryClient,
+});
+const reportController = createReportController({ reportService });
+const reportRouter = createReportRouter({
+  controller: reportController,
+  authenticate,
+  upload: reportUpload,
+  validations: reportValidations,
 });
 const noteRepository = createNoteRepository(Note);
 const noteService = createNoteService({
@@ -249,6 +315,9 @@ module.exports = {
   reportRepository,
   internalAdminReportsController,
   internalAdminReportsRouter,
+  reportService,
+  reportController,
+  reportRouter,
   connectRequestRepository,
   connectRequestService,
   connectRequestController,
@@ -279,6 +348,10 @@ module.exports = {
   noteController,
   noteRouter,
   identityClient,
+  feedbackRepository,
+  feedbackService,
+  feedbackController,
+  feedbackRouter,
   cloudinaryClient,
   notificationsHttpClient,
   notificationClient,

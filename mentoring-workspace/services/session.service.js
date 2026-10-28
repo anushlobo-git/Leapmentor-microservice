@@ -15,7 +15,7 @@ const toMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
-const createSessionService = ({ sessionRepository, notificationClient = { publish: async () => null } }) => {
+const createSessionService = ({ sessionRepository, notificationClient = { publish: async () => null }, profileClient = null, paymentsClient = null, realtimePublisher = null, logger = console }) => {
   const publish = (event) => notificationClient.publish(event).catch(() => null);
   const assertParticipant = (request, userId) => {
     if (![request.mentor, request.mentee].some((id) => String(id) === String(userId))) {
@@ -40,6 +40,11 @@ const createSessionService = ({ sessionRepository, notificationClient = { publis
     const completedSlots = activeSlots.filter((slot) => slot.menteeMarked && slot.mentorMarked).length;
     return { activeSlots, completedSlots, progress: activeSlots.length ? Math.round((completedSlots / activeSlots.length) * 100) : 0 };
   };
+  const publishSlotUpdate = (request, payload) => {
+    for (const recipient of [request.mentor, request.mentee]) {
+      realtimePublisher?.publishToUser?.(recipient, "session_slots_updated", payload);
+    }
+  };
 
   const getSlots = async (connectRequestId, userId) => {
     const request = await sessionRepository.findById(connectRequestId);
@@ -60,10 +65,11 @@ const createSessionService = ({ sessionRepository, notificationClient = { publis
     const index = slotIndex(request, indexValue);
     request.selectedSlots[index].meetingLink = meetingLink.trim();
     await sessionRepository.save(request);
+    publishSlotUpdate(request, { requestId: connectRequestId, slotIndex: index, slot: request.selectedSlots[index] });
     return { slot: request.selectedSlots[index], slotIndex: index };
   };
 
-  const markSlotComplete = async ({ connectRequestId, slotIndex: indexValue, userId }) => {
+  const markSlotComplete = async ({ connectRequestId, slotIndex: indexValue, userId, correlationId }) => {
     const request = await sessionRepository.findById(connectRequestId);
     if (!request) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     assertParticipant(request, userId); assertOngoing(request);
@@ -77,6 +83,7 @@ const createSessionService = ({ sessionRepository, notificationClient = { publis
     const bothMarked = Boolean(slot.menteeMarked && slot.mentorMarked);
     if (bothMarked) slot.completedAt = new Date();
     await sessionRepository.save(request);
+    publishSlotUpdate(request, { requestId: connectRequestId, slotIndex: index, slot, bothMarked });
     if (bothMarked) {
       await Promise.all([request.mentor, request.mentee].map((recipient) => publish({
         sourceEventId: `workspace.session:${connectRequestId}:slot:${index}:completed:${recipient}`,
@@ -89,7 +96,15 @@ const createSessionService = ({ sessionRepository, notificationClient = { publis
     }
     const result = stats(request.selectedSlots);
     const allComplete = result.activeSlots.length > 0 && result.completedSlots === result.activeSlots.length;
-    return { success: true, slot, slotIndex: index, bothMarked, allComplete, completedSlots: result.completedSlots, totalSlots: result.activeSlots.length, progress: result.progress, escrowRelease: null };
+    let escrowRelease = null;
+    if (allComplete && paymentsClient) {
+      try {
+        escrowRelease = await paymentsClient.releaseEscrow(connectRequestId, request.mentee, correlationId);
+      } catch (error) {
+        logger.warn?.("Escrow release failed after session completion", { connectRequestId, reason: error.message });
+      }
+    }
+    return { success: true, slot, slotIndex: index, bothMarked, allComplete, completedSlots: result.completedSlots, totalSlots: result.activeSlots.length, progress: result.progress, escrowRelease };
   };
 
   const addSlot = async ({ connectRequestId, date, startTime, endTime, userId }) => {
@@ -103,6 +118,7 @@ const createSessionService = ({ sessionRepository, notificationClient = { publis
     request.additionalSlots = request.additionalSlots || [];
     request.additionalSlots.push(slot);
     await sessionRepository.save(request);
+    publishSlotUpdate(request, { requestId: connectRequestId, additionalSlot: slot, type: "added" });
     return { slot: request.additionalSlots.at(-1), additionalSlots: request.additionalSlots };
   };
 
@@ -115,6 +131,7 @@ const createSessionService = ({ sessionRepository, notificationClient = { publis
     if (slot.status === "cancelled") throw new AppError("Slot is already cancelled", 400, "SLOT_CANCELLED");
     slot.status = "cancelled"; slot.cancelledBy = String(request.mentor) === String(userId) ? "mentor" : "mentee"; slot.cancelledAt = new Date(); slot.cancellationReason = String(reason || "").trim();
     await sessionRepository.save(request);
+    publishSlotUpdate(request, { requestId: connectRequestId, slotIndex: index, slot, type: "cancelled" });
     return { slot, slotIndex: index };
   };
 
@@ -129,10 +146,19 @@ const createSessionService = ({ sessionRepository, notificationClient = { publis
     if (request.selectedSlots.some((slot, slotIndexValue) => slotIndexValue !== index && slot.status !== "cancelled" && slot.date === date && slot.startTime === startTime && slot.endTime === endTime)) throw new AppError("This slot already exists", 409, "SLOT_EXISTS");
     Object.assign(current, { date, startTime, endTime, isRescheduled: true, rescheduledFromIndex: index });
     await sessionRepository.save(request);
+    publishSlotUpdate(request, { requestId: connectRequestId, slotIndex: index, slot: current, type: "rescheduled" });
     return { slot: current, slotIndex: index };
   };
 
-  return { getSlots, setMeetingLink, markSlotComplete, addSlot, cancelSlot, rescheduleSlot };
+  const getMentorAvailability = async (connectRequestId, duration, userId, correlationId) => {
+    const request = await sessionRepository.findById(connectRequestId);
+    if (!request) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+    assertParticipant(request, userId);
+    if (!profileClient) return { slots: [], timezone: "Asia/Kolkata", sessionDurations: [30, 60] };
+    return profileClient.getMentorAvailability(request.mentor, duration, userId, correlationId);
+  };
+
+  return { getSlots, setMeetingLink, markSlotComplete, addSlot, cancelSlot, rescheduleSlot, getMentorAvailability };
 };
 
 module.exports = createSessionService;
