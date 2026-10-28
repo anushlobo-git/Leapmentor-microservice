@@ -8,7 +8,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test",
-    "seed:commission": "node scripts/seedPlatformCommission.js"
+    "seed:commission": "node scripts/seedPlatformCommission.js",
+    "fix:wallet-indexes": "node scripts/fixWalletIndexes.js"
   },
   "engines": {
     "node": ">=18 <23",

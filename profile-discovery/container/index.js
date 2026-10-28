@@ -52,7 +52,10 @@ const mentorSearchValidations = require("../middleware/mentorSearchValidation");
 const uploadMiddleware = require("../middleware/upload.middleware");
 const uploadValidations = require("../middleware/uploadValidation");
 const googleCalendarValidations = require("../middleware/googleCalendarValidation");
-const { cloudinary, configured: cloudinaryConfigured } = require("../config/cloudinary");
+const {
+  cloudinary,
+  configured: cloudinaryConfigured,
+} = require("../config/cloudinary");
 const streamifier = require("streamifier");
 const { google } = require("googleapis");
 const createCalendarStateService = require("../utils/calendarState.service");
@@ -75,7 +78,9 @@ const workspaceHttpClient = createAvailabilityHttpClient({
   serviceToken: env.workspaceServiceToken,
   timeoutMs: env.internalHttpTimeoutMs,
 });
-const workspaceClient = createWorkspaceClient({ httpClient: workspaceHttpClient });
+const workspaceClient = createWorkspaceClient({
+  httpClient: workspaceHttpClient,
+});
 const tokenService = createTokenService({ accessSecret: env.jwtAccessSecret });
 const mentorProfileRepository = createMentorProfileRepository(MentorProfile);
 const mentorProfileService = createMentorProfileService({
@@ -114,7 +119,9 @@ const availabilityService = createAvailabilityService({
   workspaceClient,
   toAvailabilityDTO: require("../utils/availability.mapper").toAvailabilityDTO,
 });
-const availabilityController = createAvailabilityController({ availabilityService });
+const availabilityController = createAvailabilityController({
+  availabilityService,
+});
 const availabilityRouter = createAvailabilityRouter({
   availabilityController,
   authenticate,
@@ -127,7 +134,9 @@ const mentorSearchService = createMentorSearchService({
   identityClient,
   toMentorSearchDTO: require("../utils/mentorSearch.mapper").toMentorSearchDTO,
 });
-const mentorSearchController = createMentorSearchController({ mentorSearchService });
+const mentorSearchController = createMentorSearchController({
+  mentorSearchService,
+});
 const mentorSearchRouter = createMentorSearchRouter({
   mentorSearchController,
   authenticate,
@@ -185,6 +194,9 @@ const internalAdminServiceAuth = createInternalServiceAuth({
 });
 const internalServiceAuth = createInternalServiceAuth({
   serviceToken: env.profileServiceToken,
+  routeScopes: {
+    "/internal/v1/mentors": [env.workspaceServiceToken],
+  },
 });
 const internalMentorRatingController = createInternalMentorRatingController({
   mentorProfileRepository,
@@ -208,11 +220,12 @@ const internalAdminStatsController = createInternalAdminStatsController({
 const internalAdminStatsRouter = createInternalAdminStatsRouter({
   controller: internalAdminStatsController,
 });
-const internalAdminVerificationController = createInternalAdminVerificationController({
-  mentorProfileRepository,
-  identityClient,
-  toMentorProfileDTO,
-});
+const internalAdminVerificationController =
+  createInternalAdminVerificationController({
+    mentorProfileRepository,
+    identityClient,
+    toMentorProfileDTO,
+  });
 const internalAdminVerificationRouter = createInternalAdminVerificationRouter({
   controller: internalAdminVerificationController,
 });

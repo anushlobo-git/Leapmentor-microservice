@@ -61,9 +61,8 @@ const paymentsClient = createPaymentsClient({
 
 const userRepository = createUserRepository(User);
 const oauthAccountRepository = createOAuthAccountRepository(OAuthAccount);
-const verificationTokenRepository = createVerificationTokenRepository(
-  VerificationToken,
-);
+const verificationTokenRepository =
+  createVerificationTokenRepository(VerificationToken);
 const tokenService = createTokenService({
   accessSecret: env.jwtAccessSecret,
   refreshSecret: env.jwtRefreshSecret,
@@ -103,7 +102,9 @@ const refreshController = createRefreshController({ sessionService });
 const cookieService = createCookieService({
   isProduction: env.nodeEnv === "production",
 });
-const oauthStateService = createOAuthStateService({ secret: env.oauthStateSecret });
+const oauthStateService = createOAuthStateService({
+  secret: env.oauthStateSecret,
+});
 const oauthController = createOAuthController({
   googleAuthService,
   linkedinAuthService,
@@ -138,9 +139,16 @@ const internalAdminUserRouter = createInternalAdminUserRouter({
 });
 const internalServiceAuth = createInternalServiceAuth({
   serviceTokens: [env.profileServiceToken, env.workspaceServiceToken],
+  routeScopes: {
+    "/internal/v1/users": [env.profileServiceToken, env.workspaceServiceToken],
+  },
 });
 const internalAdminServiceAuth = createInternalServiceAuth({
   serviceToken: env.adminServiceToken,
+  routeScopes: {
+    "/internal/v1/admin/users": [env.adminServiceToken],
+    "/internal/v1/admin": [env.adminServiceToken],
+  },
 });
 const internalAdminStatsController = createInternalAdminStatsController({
   userRepository,

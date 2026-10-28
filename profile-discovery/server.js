@@ -1,6 +1,7 @@
 const http = require("node:http");
 
 const createApp = require("./app");
+const { startCleanupCron } = require("./cron/cleanupAvailability");
 const container = require("./container");
 const env = require("./config/env");
 
@@ -16,8 +17,11 @@ const startServer = async () => {
         "MONGO_URI is not configured; Profile & Discovery will remain not ready\n",
       );
     }
+    startCleanupCron();
     server = httpServer.listen(env.port, () => {
-      process.stdout.write(`${env.serviceName} service listening on port ${env.port}\n`);
+      process.stdout.write(
+        `${env.serviceName} service listening on port ${env.port}\n`,
+      );
     });
   } catch (error) {
     process.stderr.write(`Profile database startup failed: ${error.message}\n`);
