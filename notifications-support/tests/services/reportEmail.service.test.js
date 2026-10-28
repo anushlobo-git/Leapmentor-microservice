@@ -74,7 +74,10 @@ test("delivers payment invoice emails with a PDF attachment", async () => {
     invoicePdfBase64: pdf.toString("base64"),
   };
 
-  assert.deepEqual(await service.sendReportEvent(event), { sent: true, deduplicated: false });
+  assert.deepEqual(await service.sendReportEvent(event), {
+    sent: true,
+    deduplicated: false,
+  });
   assert.equal(sent[0].to, "mentee@example.com");
   assert.equal(sent[0].attachments[0].filename, "Invoice-INV-123456.pdf");
   assert.deepEqual(sent[0].attachments[0].content, pdf);

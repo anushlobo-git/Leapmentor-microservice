@@ -23,11 +23,14 @@ const seedPlatformCommission = async ({
 const main = async () => {
   try {
     const connected = await db.connectDatabase();
-    if (!connected) throw new Error("MONGO_URI is required to seed the commission rate");
+    if (!connected)
+      throw new Error("MONGO_URI is required to seed the commission rate");
     const result = await seedPlatformCommission();
-    process.stdout.write(result.inserted
-      ? `Seeded commission rate at ${result.rate}%\n`
-      : "Commission rate already exists; left unchanged\n");
+    process.stdout.write(
+      result.inserted
+        ? `Seeded commission rate at ${result.rate}%\n`
+        : "Commission rate already exists; left unchanged\n",
+    );
   } catch (error) {
     process.stderr.write(`Commission seed failed: ${error.message}\n`);
     process.exitCode = 1;

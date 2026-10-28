@@ -34,6 +34,9 @@ const createReportsRouter = require("../routes/reports.routes");
 const createAdminPaymentsService = require("../services/payments.service");
 const createAdminPaymentsController = require("../controllers/payments.controller");
 const createAdminPaymentsRouter = require("../routes/payments.routes");
+const createInternalServiceAuth = require("../middleware/internalServiceAuth");
+const createInternalAdminAuthController = require("../controllers/internalAdminAuth.controller");
+const createInternalAdminAuthRouter = require("../routes/internalAdminAuth.routes");
 const createAdminAuthenticate = require("../middleware/adminAuthenticate");
 const createRequireReady = require("../middleware/requireReady");
 const { toAdminDTO } = require("../utils/admin.mapper");
@@ -56,10 +59,25 @@ const authenticate = createAdminAuthenticate({
   accessSecret: env.jwtAccessSecret,
   toAdminDTO,
 });
+const internalServiceAuth = createInternalServiceAuth({
+  serviceToken: env.adminServiceToken,
+});
+const internalAdminAuthController = createInternalAdminAuthController({
+  adminUserRepository,
+  jwt,
+  accessSecret: env.jwtAccessSecret,
+  toAdminDTO,
+});
+const internalAdminAuthRouter = createInternalAdminAuthRouter({
+  controller: internalAdminAuthController,
+});
 const authController = createAuthController({ authService });
 const authRouter = createAuthRouter({
   controller: authController,
   authenticate,
+  internalServiceAuth,
+  internalAdminAuthController,
+  internalAdminAuthRouter,
   validateLogin,
   requireReady: createRequireReady({ health }),
 });
@@ -161,9 +179,16 @@ const reportsRouter = createReportsRouter({
   controller: reportsController,
   authenticate,
 });
-const paymentsService = createAdminPaymentsService({ paymentsClient, workspaceClient, identityClient });
+const paymentsService = createAdminPaymentsService({
+  paymentsClient,
+  workspaceClient,
+  identityClient,
+});
 const paymentsController = createAdminPaymentsController({ paymentsService });
-const paymentsRouter = createAdminPaymentsRouter({ controller: paymentsController, authenticate });
+const paymentsRouter = createAdminPaymentsRouter({
+  controller: paymentsController,
+  authenticate,
+});
 
 module.exports = {
   health,

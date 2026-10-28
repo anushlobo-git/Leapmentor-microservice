@@ -6,8 +6,14 @@ const createController = require("../../controllers/internalAdminPayments.contro
 const response = () => ({
   statusCode: null,
   body: null,
-  status(code) { this.statusCode = code; return this; },
-  json(body) { this.body = body; return this; },
+  status(code) {
+    this.statusCode = code;
+    return this;
+  },
+  json(body) {
+    this.body = body;
+    return this;
+  },
 });
 
 test("aggregates completed paid-session revenue and refund count from Workspace records", async () => {
@@ -22,14 +28,21 @@ test("aggregates completed paid-session revenue and refund count from Workspace 
   });
   const res = response();
   await controller.getStats({}, res, assert.fail);
-  assert.deepEqual(res.body.data, { totalRevenue: 200, platformCommission: 30, refundedRequests: 3 });
+  assert.deepEqual(res.body.data, {
+    totalRevenue: 200,
+    platformCommission: 30,
+    refundedRequests: 3,
+  });
 });
 
 test("returns six monthly revenue points from Workspace session records", async () => {
   const monthRanges = [];
   const controller = createController({
     connectRequestRepository: {
-      findSessionsByMonth: async (start, end) => { monthRanges.push([start, end]); return [{ totalAmount: 40 }]; },
+      findSessionsByMonth: async (start, end) => {
+        monthRanges.push([start, end]);
+        return [{ totalAmount: 40 }];
+      },
     },
   });
   const res = response();

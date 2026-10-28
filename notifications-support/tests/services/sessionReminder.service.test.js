@@ -48,3 +48,56 @@ test("skips reminder scans until the Workspace client is configured", async () =
     reason: "workspace-client-not-configured",
   });
 });
+
+test("only one reminder service instance scans while the Redis lease is held", async () => {
+  let lockValue = null;
+  let releaseScan;
+  let enteredScan;
+  const entered = new Promise((resolve) => {
+    enteredScan = resolve;
+  });
+  const scanGate = new Promise((resolve) => {
+    releaseScan = resolve;
+  });
+  const lockClient = {
+    set: async (_key, value) => {
+      if (lockValue) return null;
+      lockValue = value;
+      return "OK";
+    },
+    eval: async (script, { arguments: args }) => {
+      if (script.includes("PEXPIRE")) return lockValue === args[0] ? 1 : 0;
+      if (lockValue === args[0]) {
+        lockValue = null;
+        return 1;
+      }
+      return 0;
+    },
+  };
+  const createWorker = (listUpcomingSessions) =>
+    createSessionReminderService({
+      workspaceClient: { isConfigured: () => true, listUpcomingSessions },
+      notificationService: { createFromEvent: async () => {} },
+      lockClient,
+      distributedLockEnabled: true,
+    });
+  const workerOne = createWorker(async () => {
+    enteredScan();
+    await scanGate;
+    return [];
+  });
+  const workerTwo = createWorker(async () => []);
+
+  const firstScan = workerOne.runOnce();
+  await entered;
+  const secondResult = await workerTwo.runOnce();
+  releaseScan();
+  const firstResult = await firstScan;
+
+  assert.deepEqual(secondResult, {
+    skipped: true,
+    reason: "another-worker-active",
+  });
+  assert.deepEqual(firstResult, { scanned: 0, delivered: 0 });
+  assert.equal(lockValue, null);
+});

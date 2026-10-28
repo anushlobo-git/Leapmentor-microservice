@@ -79,11 +79,16 @@ test("commission-rate route requires authentication and returns the frontend res
   });
 
   try {
-    const unauthorized = await fetch(`${serverDetails.url}/api/v1/escrow/commission-rate`);
+    const unauthorized = await fetch(
+      `${serverDetails.url}/api/v1/escrow/commission-rate`,
+    );
     const token = jwt.sign({ id: "mentee-1", type: "access" }, "test-secret");
-    const response = await fetch(`${serverDetails.url}/api/v1/escrow/commission-rate`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await fetch(
+      `${serverDetails.url}/api/v1/escrow/commission-rate`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
     assert.equal(unauthorized.status, 401);
     assert.deepEqual(await response.json(), { commissionRate: 17.5 });
   } finally {

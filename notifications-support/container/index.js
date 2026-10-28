@@ -36,6 +36,7 @@ const createInternalEmailRouter = require("../routes/internalEmail.routes");
 const { sendEmail } = require("../clients/smtpMailer");
 const createWorkspaceClient = require("../clients/workspaceClient");
 const createSessionReminderService = require("../services/sessionReminder.service");
+const createAdminAuthClient = require("../clients/adminAuthClient");
 
 const health = { isReady: () => db.isConnected() };
 const notificationRepository = createNotificationRepository(Notification);
@@ -61,6 +62,8 @@ const workspaceClient = createWorkspaceClient({});
 const sessionReminderService = createSessionReminderService({
   workspaceClient,
   notificationService,
+  lockClient: notificationRedisClient,
+  distributedLockEnabled: env.redisEnabled,
 });
 const emailDeliveryRepository = createEmailDeliveryRepository(EmailDelivery);
 const reportEmailService = createReportEmailService({
@@ -118,8 +121,10 @@ const supportController = createSupportController({
 const optionalAuthenticate = createOptionalAuthenticate({
   accessSecret: env.jwtAccessSecret,
 });
+const adminAuthClient = createAdminAuthClient({});
 const adminAuthenticate = createAdminAuthenticate({
   accessSecret: env.jwtAccessSecret,
+  validateAdminToken: adminAuthClient.validateAdminToken,
 });
 const supportRouter = createSupportRouter({
   controller: supportController,
@@ -151,6 +156,7 @@ module.exports = {
   internalNotificationController,
   internalNotificationRouter,
   notificationConsumer,
+  adminAuthClient,
   notificationEventRedisClient,
   supportMessageRepository,
   supportMessageService,

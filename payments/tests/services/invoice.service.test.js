@@ -63,11 +63,22 @@ test("rejects unauthorized users and unpaid sessions", async () => {
 test("accepts a configured zero-percent platform commission", async () => {
   const generated = [];
   const service = createInvoiceService({
-    workspaceClient: { getInvoiceContext: async () => ({ mentee: "mentee-1", paymentStatus: "paid" }) },
+    workspaceClient: {
+      getInvoiceContext: async () => ({
+        mentee: "mentee-1",
+        paymentStatus: "paid",
+      }),
+    },
     getCommissionRate: async () => 0,
-    generateInvoice: async (data) => { generated.push(data); return Buffer.from("%PDF"); },
+    generateInvoice: async (data) => {
+      generated.push(data);
+      return Buffer.from("%PDF");
+    },
   });
-  await service.generateInvoicePdfBuffer({ connectRequestId: "request-1", userId: "mentee-1" });
+  await service.generateInvoicePdfBuffer({
+    connectRequestId: "request-1",
+    userId: "mentee-1",
+  });
   assert.equal(generated[0].platformFeePercent, 0);
 });
 

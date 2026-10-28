@@ -37,6 +37,14 @@ const createApp = (container = {}) => {
     app.use("/api/v1/admin/auth", container.authRouter);
   }
 
+  if (container.internalAdminAuthRouter && container.internalServiceAuth) {
+    app.use(
+      "/internal/v1/admin-auth",
+      container.internalServiceAuth,
+      container.internalAdminAuthRouter,
+    );
+  }
+
   if (container.userManagementRouter) {
     app.use(
       "/api/v1/admin/users",

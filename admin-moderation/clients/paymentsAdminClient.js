@@ -56,7 +56,8 @@ const createPaymentsAdminClient = ({ httpClient }) => ({
   getAdminPaymentTransactions: (query = {}, correlationId) => {
     const params = new URLSearchParams();
     for (const key of ["page", "limit", "type", "userIds"]) {
-      if (query[key] !== undefined && query[key] !== "") params.set(key, String(query[key]));
+      if (query[key] !== undefined && query[key] !== "")
+        params.set(key, String(query[key]));
     }
     const suffix = params.toString() ? `?${params}` : "";
     return httpClient.request({

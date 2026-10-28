@@ -37,11 +37,12 @@ const createNotificationClient = ({
     try {
       const response = await httpClient.request({
         method: "POST",
-        path: event.eventType === "payment.invoice.email"
-          ? "/internal/v1/email-events/invoice-events"
-          : event.eventType?.endsWith(".email")
-            ? "/internal/v1/email-events/report-events"
-            : "/internal/v1/notifications",
+        path:
+          event.eventType === "payment.invoice.email"
+            ? "/internal/v1/email-events/invoice-events"
+            : event.eventType?.endsWith(".email")
+              ? "/internal/v1/email-events/report-events"
+              : "/internal/v1/notifications",
         body: event,
         correlationId,
         idempotencyKey: event.sourceEventId,

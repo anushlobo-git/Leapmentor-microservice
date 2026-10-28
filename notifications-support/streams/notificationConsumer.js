@@ -5,8 +5,11 @@ const createNotificationConsumer = ({
   consumerName,
   notificationService,
   reportEmailService = null,
+  maxDeliveries = 5,
   enabled = false,
 }) => {
+  const deadLetterStreamName = `${streamName}:dead-letter`;
+  const deliveryCountKey = `${streamName}:${groupName}:delivery-counts`;
   let stopped = false;
   let loopPromise = null;
 
@@ -64,10 +67,34 @@ const createNotificationConsumer = ({
           await notificationService.createFromEvent(event);
         }
         await client.xAck(streamName, groupName, record.id);
+        await client.hDel?.(deliveryCountKey, record.id);
       } catch (error) {
-        process.stderr.write(
-          `Notification event processing failed: ${error.message}\n`,
-        );
+        try {
+          const attempts = await client.hIncrBy(deliveryCountKey, record.id, 1);
+          if (attempts >= maxDeliveries) {
+            await client.xAdd(deadLetterStreamName, "*", {
+              sourceStream: streamName,
+              sourceMessageId: String(record.id),
+              payload: String(record.message.payload || ""),
+              error: String(error.message || error).slice(0, 1000),
+              deliveryAttempts: String(attempts),
+              failedAt: new Date().toISOString(),
+            });
+            await client.xAck(streamName, groupName, record.id);
+            await client.hDel(deliveryCountKey, record.id);
+            process.stderr.write(
+              `Notification event dead-lettered: ${record.id}\n`,
+            );
+          } else {
+            process.stderr.write(
+              `Notification event processing failed (${attempts}/${maxDeliveries}): ${error.message}\n`,
+            );
+          }
+        } catch (deadLetterError) {
+          process.stderr.write(
+            `Notification event retry bookkeeping failed: ${deadLetterError.message}\n`,
+          );
+        }
       }
     }
   };
@@ -110,7 +137,21 @@ const createNotificationConsumer = ({
     loopPromise = null;
   };
 
-  return { start, stop, ensureGroup };
+  const replayDeadLetter = async (deadLetterId) => {
+    const records = await client.xRange(
+      deadLetterStreamName,
+      deadLetterId,
+      deadLetterId,
+      { COUNT: 1 },
+    );
+    const record = records?.[0];
+    if (!record) return { replayed: false, reason: "dead-letter-not-found" };
+    await client.xAdd(streamName, "*", { payload: record.message.payload });
+    await client.xDel(deadLetterStreamName, record.id);
+    return { replayed: true, sourceMessageId: record.message.sourceMessageId };
+  };
+
+  return { start, stop, ensureGroup, replayDeadLetter, deadLetterStreamName };
 };
 
 module.exports = createNotificationConsumer;

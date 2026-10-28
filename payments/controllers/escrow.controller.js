@@ -1,7 +1,9 @@
 const createEscrowController = ({ escrowService, getCommissionRate }) => {
   const commissionRate = async (_req, res, next) => {
     try {
-      return res.status(200).json({ commissionRate: await getCommissionRate() });
+      return res
+        .status(200)
+        .json({ commissionRate: await getCommissionRate() });
     } catch (error) {
       return next(error);
     }
@@ -14,7 +16,13 @@ const createEscrowController = ({ escrowService, getCommissionRate }) => {
         menteeId: req.user._id,
         correlationId: req.correlationId,
       });
-      return res.status(200).json({ success: true, data: result, message: "Payment successful. Tokens locked in escrow." });
+      return res
+        .status(200)
+        .json({
+          success: true,
+          data: result,
+          message: "Payment successful. Tokens locked in escrow.",
+        });
     } catch (error) {
       return next(error);
     }
@@ -27,7 +35,14 @@ const createEscrowController = ({ escrowService, getCommissionRate }) => {
         menteeId: req.user._id,
         correlationId: req.correlationId,
       });
-      return res.status(200).json({ success: true, data: result, message: "Additional session payment successful. Tokens locked in escrow." });
+      return res
+        .status(200)
+        .json({
+          success: true,
+          data: result,
+          message:
+            "Additional session payment successful. Tokens locked in escrow.",
+        });
     } catch (error) {
       return next(error);
     }
@@ -40,7 +55,13 @@ const createEscrowController = ({ escrowService, getCommissionRate }) => {
         menteeId: req.user._id,
         correlationId: req.correlationId,
       });
-      return res.status(200).json({ success: true, data: result, message: "Session marked complete. Tokens released to mentor." });
+      return res
+        .status(200)
+        .json({
+          success: true,
+          data: result,
+          message: "Session marked complete. Tokens released to mentor.",
+        });
     } catch (error) {
       return next(error);
     }
@@ -53,7 +74,13 @@ const createEscrowController = ({ escrowService, getCommissionRate }) => {
         userId: req.user._id,
         correlationId: req.correlationId,
       });
-      return res.status(200).json({ success: true, data: result, message: "Escrow refunded successfully. Tokens returned to mentee." });
+      return res
+        .status(200)
+        .json({
+          success: true,
+          data: result,
+          message: "Escrow refunded successfully. Tokens returned to mentee.",
+        });
     } catch (error) {
       return next(error);
     }
@@ -66,7 +93,13 @@ const createEscrowController = ({ escrowService, getCommissionRate }) => {
         userId: req.user._id,
         correlationId: req.correlationId,
       });
-      return res.status(200).json({ success: true, data: result, message: "Escrow status retrieved" });
+      return res
+        .status(200)
+        .json({
+          success: true,
+          data: result,
+          message: "Escrow status retrieved",
+        });
     } catch (error) {
       return next(error);
     }

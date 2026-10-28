@@ -42,7 +42,11 @@ const build = ({ balance = 90, completed = [], ongoing = [] } = {}) => {
         idempotency.set(record.key, { ...record, status: "pending" });
       },
       markSucceeded: async (key, responseBody) => {
-        idempotency.set(key, { ...idempotency.get(key), status: "succeeded", responseBody });
+        idempotency.set(key, {
+          ...idempotency.get(key),
+          status: "succeeded",
+          responseBody,
+        });
       },
       deletePending: async (key) => idempotency.delete(key),
     },
@@ -67,10 +71,13 @@ test("aggregates completed earnings, ongoing payout, rating, and mentor wallet b
 
 test("withdraws the mentor wallet and records the balance-zeroing ledger entry", async () => {
   const { service, transactions, calls } = build({ balance: 75 });
-  assert.deepEqual(await service.withdrawEarningsService("mentor-1", "withdrawal-1"), {
-    withdrawn: 75,
-    newBalance: 0,
-  });
+  assert.deepEqual(
+    await service.withdrawEarningsService("mentor-1", "withdrawal-1"),
+    {
+      withdrawn: 75,
+      newBalance: 0,
+    },
+  );
   assert.deepEqual(calls, [["balance", 0]]);
   assert.equal(transactions[0].type, "withdrawal");
   assert.equal(transactions[0].amount, 75);
@@ -78,17 +85,26 @@ test("withdraws the mentor wallet and records the balance-zeroing ledger entry",
 
 test("refuses withdrawal for a mentor with no available wallet balance", async () => {
   const { service, transactions } = build({ balance: 0 });
-  await assert.rejects(service.withdrawEarningsService("mentor-1", "withdrawal-2"), {
-    statusCode: 400,
-    code: "NO_EARNINGS_TO_WITHDRAW",
-  });
+  await assert.rejects(
+    service.withdrawEarningsService("mentor-1", "withdrawal-2"),
+    {
+      statusCode: 400,
+      code: "NO_EARNINGS_TO_WITHDRAW",
+    },
+  );
   assert.equal(transactions.length, 0);
 });
 
 test("returns the original withdrawal response for an idempotent retry", async () => {
   const { service, transactions, idempotency } = build({ balance: 75 });
-  const first = await service.withdrawEarningsService("mentor-1", "withdrawal-3");
-  const second = await service.withdrawEarningsService("mentor-1", "withdrawal-3");
+  const first = await service.withdrawEarningsService(
+    "mentor-1",
+    "withdrawal-3",
+  );
+  const second = await service.withdrawEarningsService(
+    "mentor-1",
+    "withdrawal-3",
+  );
   assert.deepEqual(second, first);
   assert.equal(transactions.length, 1);
   assert.equal(idempotency.get("withdrawal-3").status, "succeeded");
@@ -97,8 +113,11 @@ test("returns the original withdrawal response for an idempotent retry", async (
 test("rejects reusing a withdrawal idempotency key for another mentor", async () => {
   const { service } = build({ balance: 75 });
   await service.withdrawEarningsService("mentor-1", "withdrawal-4");
-  await assert.rejects(service.withdrawEarningsService("mentor-2", "withdrawal-4"), {
-    statusCode: 409,
-    code: "IDEMPOTENCY_KEY_REUSED",
-  });
+  await assert.rejects(
+    service.withdrawEarningsService("mentor-2", "withdrawal-4"),
+    {
+      statusCode: 409,
+      code: "IDEMPOTENCY_KEY_REUSED",
+    },
+  );
 });

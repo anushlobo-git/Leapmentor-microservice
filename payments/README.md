@@ -30,15 +30,15 @@ and reconciliation process; review that boundary before production use.
 
 Browser-facing routes use `/api/v1/escrow` and require authentication:
 
-| Route | Operation |
-| --- | --- |
-| `GET /wallet` | Read the authenticated mentee wallet |
-| `POST /pay` | Pay into escrow for a request |
-| `POST /pay-additional` | Pay for an additional session |
-| `POST /release/:requestId` | Release escrow |
-| `POST /refund/:requestId` | Refund escrow |
-| `GET /status/:requestId` | Read payment status |
-| `GET /commission-rate` | Read the configured commission rate |
+| Route                      | Operation                            |
+| -------------------------- | ------------------------------------ |
+| `GET /wallet`              | Read the authenticated mentee wallet |
+| `POST /pay`                | Pay into escrow for a request        |
+| `POST /pay-additional`     | Pay for an additional session        |
+| `POST /release/:requestId` | Release escrow                       |
+| `POST /refund/:requestId`  | Refund escrow                        |
+| `GET /status/:requestId`   | Read payment status                  |
+| `GET /commission-rate`     | Read the configured commission rate  |
 
 Invoice and mentor earnings routes are mounted at `/api/v1/invoices` and
 `/api/v1/mentor/earnings`. Leap Request browser paths are mounted at
@@ -47,11 +47,11 @@ Moderation.
 
 Trusted internal routes use `/internal/v1` and require service authentication:
 
-| Route prefix | Operations |
-| --- | --- |
-| `/wallets` | Provision wallets |
-| `/settings` | Read or update commission |
-| `/refunds` | Process an internal refund request |
+| Route prefix | Operations                         |
+| ------------ | ---------------------------------- |
+| `/wallets`   | Provision wallets                  |
+| `/settings`  | Read or update commission          |
+| `/refunds`   | Process an internal refund request |
 
 ## Project structure
 

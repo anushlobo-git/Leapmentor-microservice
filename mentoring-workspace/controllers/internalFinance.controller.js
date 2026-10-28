@@ -90,20 +90,18 @@ const createInternalFinanceController = ({
         }),
       ]);
       const payouts = await decorateMentees(rows, req.correlationId);
-      return res
-        .status(200)
-        .json({
-          success: true,
-          data: {
-            payouts,
-            pagination: {
-              totalCount,
-              currentPage: page,
-              totalPages: Math.ceil(totalCount / limit),
-              hasMore: page < Math.ceil(totalCount / limit),
-            },
+      return res.status(200).json({
+        success: true,
+        data: {
+          payouts,
+          pagination: {
+            totalCount,
+            currentPage: page,
+            totalPages: Math.ceil(totalCount / limit),
+            hasMore: page < Math.ceil(totalCount / limit),
           },
-        });
+        },
+      });
     } catch (error) {
       return next(error);
     }
@@ -124,18 +122,45 @@ const createInternalFinanceController = ({
   const queueInvoiceEmail = async (req, res, next) => {
     try {
       const event = req.body || {};
-      if (!event.sourceEventId || !event.reporterEmail || !event.invoicePdfBase64) {
-        return res.status(400).json({ error: "Invoice email event is incomplete", code: "INVALID_INVOICE_EMAIL_EVENT" });
+      if (
+        !event.sourceEventId ||
+        !event.reporterEmail ||
+        !event.invoicePdfBase64
+      ) {
+        return res
+          .status(400)
+          .json({
+            error: "Invoice email event is incomplete",
+            code: "INVALID_INVOICE_EMAIL_EVENT",
+          });
       }
       if (event.invoicePdfBase64.length > 4_000_000) {
-        return res.status(413).json({ error: "Invoice attachment is too large", code: "INVOICE_ATTACHMENT_TOO_LARGE" });
+        return res
+          .status(413)
+          .json({
+            error: "Invoice attachment is too large",
+            code: "INVOICE_ATTACHMENT_TOO_LARGE",
+          });
       }
-      const result = await notificationClient.publish({ ...event, eventType: "payment.invoice.email" }, req.correlationId);
-      return res.status(202).json({ success: true, data: result, message: "Invoice email queued" });
-    } catch (error) { return next(error); }
+      const result = await notificationClient.publish(
+        { ...event, eventType: "payment.invoice.email" },
+        req.correlationId,
+      );
+      return res
+        .status(202)
+        .json({ success: true, data: result, message: "Invoice email queued" });
+    } catch (error) {
+      return next(error);
+    }
   };
 
-  return { getInvoiceContext, getMentorSessions, getPayouts, getMentorRating, queueInvoiceEmail };
+  return {
+    getInvoiceContext,
+    getMentorSessions,
+    getPayouts,
+    getMentorRating,
+    queueInvoiceEmail,
+  };
 };
 
 module.exports = createInternalFinanceController;

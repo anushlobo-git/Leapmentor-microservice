@@ -152,48 +152,102 @@ const createEarningsService = ({
     return { payouts, pagination: response.pagination };
   };
 
-  const withdrawEarningsService = async (mentorId, idempotencyKey, correlationId) => {
+  const withdrawEarningsService = async (
+    mentorId,
+    idempotencyKey,
+    correlationId,
+  ) => {
     const key = String(idempotencyKey || "").trim();
     if (key.length < 8 || key.length > 200) {
-      throw new AppError("A valid Idempotency-Key header is required", 400, "MISSING_IDEMPOTENCY_KEY");
+      throw new AppError(
+        "A valid Idempotency-Key header is required",
+        400,
+        "MISSING_IDEMPOTENCY_KEY",
+      );
     }
-    const requestHash = crypto.createHash("sha256").update(String(mentorId)).digest("hex");
+    const requestHash = crypto
+      .createHash("sha256")
+      .update(String(mentorId))
+      .digest("hex");
     const existing = await idempotencyRepository.findByKey(key);
     if (existing) {
-      if (existing.operation !== WITHDRAWAL_OPERATION || existing.requestHash !== requestHash) {
-        throw new AppError("Idempotency key was already used for a different request", 409, "IDEMPOTENCY_KEY_REUSED");
+      if (
+        existing.operation !== WITHDRAWAL_OPERATION ||
+        existing.requestHash !== requestHash
+      ) {
+        throw new AppError(
+          "Idempotency key was already used for a different request",
+          409,
+          "IDEMPOTENCY_KEY_REUSED",
+        );
       }
       if (existing.status === "succeeded") return existing.responseBody;
-      throw new AppError("The withdrawal request is already in progress", 409, "WITHDRAWAL_IN_PROGRESS");
+      throw new AppError(
+        "The withdrawal request is already in progress",
+        409,
+        "WITHDRAWAL_IN_PROGRESS",
+      );
     }
 
     try {
-      await idempotencyRepository.createPending({ key, operation: WITHDRAWAL_OPERATION, requestHash });
+      await idempotencyRepository.createPending({
+        key,
+        operation: WITHDRAWAL_OPERATION,
+        requestHash,
+      });
     } catch (error) {
       if (error?.code !== 11000) throw error;
       const racedRequest = await idempotencyRepository.findByKey(key);
-      if (racedRequest?.operation === WITHDRAWAL_OPERATION && racedRequest.requestHash === requestHash && racedRequest.status === "succeeded") {
+      if (
+        racedRequest?.operation === WITHDRAWAL_OPERATION &&
+        racedRequest.requestHash === requestHash &&
+        racedRequest.status === "succeeded"
+      ) {
         return racedRequest.responseBody;
       }
-      throw new AppError("The withdrawal request is already in progress", 409, "WITHDRAWAL_IN_PROGRESS");
+      throw new AppError(
+        "The withdrawal request is already in progress",
+        409,
+        "WITHDRAWAL_IN_PROGRESS",
+      );
     }
 
     try {
       await requireMentor(mentorId, correlationId);
       return await runInTransaction(async (session) => {
-        const wallet = await walletRepository.findByUserIdAndRole(mentorId, "mentor", session);
-        if (!wallet) throw new AppError("Wallet registration records not found.", 404, "WALLET_NOT_FOUND");
-        if (wallet.balance <= 0) throw new AppError("No clear liquid balances are currently available to withdraw.", 400, "NO_EARNINGS_TO_WITHDRAW");
+        const wallet = await walletRepository.findByUserIdAndRole(
+          mentorId,
+          "mentor",
+          session,
+        );
+        if (!wallet)
+          throw new AppError(
+            "Wallet registration records not found.",
+            404,
+            "WALLET_NOT_FOUND",
+          );
+        if (wallet.balance <= 0)
+          throw new AppError(
+            "No clear liquid balances are currently available to withdraw.",
+            400,
+            "NO_EARNINGS_TO_WITHDRAW",
+          );
         const withdrawn = wallet.balance;
         wallet.balance = 0;
         await walletRepository.save(wallet, session);
-        await transactionRepository.createMany([{
-          user: mentorId,
-          type: "withdrawal",
-          amount: withdrawn,
-          description: "Mentor outward payout financial withdrawal request.",
-          balanceAfter: 0,
-        }], session);
+        await transactionRepository.createMany(
+          [
+            {
+              user: mentorId,
+              type: "withdrawal",
+              amount: withdrawn,
+              description:
+                "Mentor outward payout financial withdrawal request.",
+              balanceAfter: 0,
+            },
+          ],
+          session,
+        );
         const response = { withdrawn, newBalance: 0 };
         await idempotencyRepository.markSucceeded(key, response, session);
         return response;

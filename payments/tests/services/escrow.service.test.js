@@ -5,8 +5,14 @@ const createEscrowService = require("../../services/escrow.service");
 
 const createFakes = () => {
   const wallets = new Map([
-    ["mentee-1:mentee", { user: "mentee-1", role: "mentee", balance: 1000, escrow: 0 }],
-    ["mentor-1:mentor", { user: "mentor-1", role: "mentor", balance: 0, escrow: 0 }],
+    [
+      "mentee-1:mentee",
+      { user: "mentee-1", role: "mentee", balance: 1000, escrow: 0 },
+    ],
+    [
+      "mentor-1:mentor",
+      { user: "mentor-1", role: "mentor", balance: 0, escrow: 0 },
+    ],
   ]);
   const transactions = [];
   const invoiceEmails = [];
@@ -36,14 +42,17 @@ const createFakes = () => {
       workspaceUpdates.push(state);
       Object.assign(context, state);
       if (state.additionalSlotId) {
-        const slot = context.additionalSlots.find((item) => item._id === state.additionalSlotId);
+        const slot = context.additionalSlots.find(
+          (item) => item._id === state.additionalSlotId,
+        );
         Object.assign(slot, state);
       }
       return context;
     },
   };
   const walletRepository = {
-    findByUserIdAndRole: async (userId, role) => wallets.get(`${userId}:${role}`),
+    findByUserIdAndRole: async (userId, role) =>
+      wallets.get(`${userId}:${role}`),
     save: async (wallet) => wallet,
   };
   const transactionRepository = {
@@ -61,7 +70,14 @@ const createFakes = () => {
     generateInvoice: async () => Buffer.from("%PDF-invoice"),
     logger: { warn() {} },
   });
-  return { service, wallets, transactions, context, workspaceUpdates, invoiceEmails };
+  return {
+    service,
+    wallets,
+    transactions,
+    context,
+    workspaceUpdates,
+    invoiceEmails,
+  };
 };
 
 test("holds mentee funds, records a ledger transaction, and updates Workspace state", async () => {
@@ -88,38 +104,64 @@ test("holds mentee funds, records a ledger transaction, and updates Workspace st
   assert.equal(fakes.transactions[0].type, "escrow_hold");
   assert.equal(fakes.workspaceUpdates[0].paymentStatus, "paid");
   assert.equal(fakes.invoiceEmails[0].reporterEmail, "mentee@example.com");
-  assert.equal(fakes.invoiceEmails[0].invoicePdfBase64, Buffer.from("%PDF-invoice").toString("base64"));
+  assert.equal(
+    fakes.invoiceEmails[0].invoicePdfBase64,
+    Buffer.from("%PDF-invoice").toString("base64"),
+  );
 });
 
 test("invoice email failures do not roll back a successful escrow payment", async () => {
   const fakes = createFakes();
   fakes.service = createEscrowService({
     walletRepository: {
-      findByUserIdAndRole: async (userId, role) => fakes.wallets.get(`${userId}:${role}`),
+      findByUserIdAndRole: async (userId, role) =>
+        fakes.wallets.get(`${userId}:${role}`),
       save: async (wallet) => wallet,
     },
-    transactionRepository: { createMany: async (items) => fakes.transactions.push(...items) },
+    transactionRepository: {
+      createMany: async (items) => fakes.transactions.push(...items),
+    },
     workspaceClient: {
       getPaymentContext: async () => fakes.context,
-      updatePaymentState: async (_id, state) => { fakes.workspaceUpdates.push(state); Object.assign(fakes.context, state); },
-      getInvoiceContext: async () => ({ mentee: { email: "mentee@example.com" } }),
-      queueInvoiceEmail: async () => { throw new Error("Notifications unavailable"); },
+      updatePaymentState: async (_id, state) => {
+        fakes.workspaceUpdates.push(state);
+        Object.assign(fakes.context, state);
+      },
+      getInvoiceContext: async () => ({
+        mentee: { email: "mentee@example.com" },
+      }),
+      queueInvoiceEmail: async () => {
+        throw new Error("Notifications unavailable");
+      },
     },
     runInTransaction: async (work) => work({}),
     getCommissionRate: async () => 20,
     generateInvoice: async () => Buffer.from("%PDF"),
     logger: { warn() {} },
   });
-  const result = await fakes.service.pay({ connectRequestId: "request-1", sessionRate: 100, sessionCount: 2, menteeId: "mentee-1" });
+  const result = await fakes.service.pay({
+    connectRequestId: "request-1",
+    sessionRate: 100,
+    sessionCount: 2,
+    menteeId: "mentee-1",
+  });
   assert.equal(result.paymentStatus, "paid");
   assert.equal(fakes.transactions[0].type, "escrow_hold");
 });
 
 test("releases escrow to the mentor and marks the Workspace request completed", async () => {
   const fakes = createFakes();
-  await fakes.service.pay({ connectRequestId: "request-1", sessionRate: 100, sessionCount: 2, menteeId: "mentee-1" });
+  await fakes.service.pay({
+    connectRequestId: "request-1",
+    sessionRate: 100,
+    sessionCount: 2,
+    menteeId: "mentee-1",
+  });
 
-  const result = await fakes.service.release({ requestId: "request-1", menteeId: "mentee-1" });
+  const result = await fakes.service.release({
+    requestId: "request-1",
+    menteeId: "mentee-1",
+  });
 
   assert.equal(result.status, "completed");
   assert.equal(result.mentorPayout, 200);
@@ -130,9 +172,17 @@ test("releases escrow to the mentor and marks the Workspace request completed", 
 
 test("refunds paid escrow for an authorized participant", async () => {
   const fakes = createFakes();
-  await fakes.service.pay({ connectRequestId: "request-1", sessionRate: 100, sessionCount: 2, menteeId: "mentee-1" });
+  await fakes.service.pay({
+    connectRequestId: "request-1",
+    sessionRate: 100,
+    sessionCount: 2,
+    menteeId: "mentee-1",
+  });
 
-  const result = await fakes.service.refund({ requestId: "request-1", userId: "mentor-1" });
+  const result = await fakes.service.refund({
+    requestId: "request-1",
+    userId: "mentor-1",
+  });
 
   assert.equal(result.paymentStatus, "refunded");
   assert.equal(result.balance, 1000);
@@ -142,14 +192,25 @@ test("refunds paid escrow for an authorized participant", async () => {
 
 test("returns a participant-scoped escrow status and rejects outsiders", async () => {
   const fakes = createFakes();
-  await fakes.service.pay({ connectRequestId: "request-1", sessionRate: 100, sessionCount: 2, menteeId: "mentee-1" });
-
-  const status = await fakes.service.getStatus({ requestId: "request-1", userId: "mentee-1" });
-  assert.deepEqual(status.wallet, { balance: 760, escrow: 240 });
-  await assert.rejects(fakes.service.getStatus({ requestId: "request-1", userId: "outsider" }), {
-    statusCode: 403,
-    code: "NOT_REQUEST_PARTICIPANT",
+  await fakes.service.pay({
+    connectRequestId: "request-1",
+    sessionRate: 100,
+    sessionCount: 2,
+    menteeId: "mentee-1",
   });
+
+  const status = await fakes.service.getStatus({
+    requestId: "request-1",
+    userId: "mentee-1",
+  });
+  assert.deepEqual(status.wallet, { balance: 760, escrow: 240 });
+  await assert.rejects(
+    fakes.service.getStatus({ requestId: "request-1", userId: "outsider" }),
+    {
+      statusCode: 403,
+      code: "NOT_REQUEST_PARTICIPANT",
+    },
+  );
 });
 
 test("charges and marks an additional Workspace slot", async () => {

@@ -22,7 +22,8 @@ test("finance and reminder source APIs require the Workspace service token", asy
             res.json({ data: { sessions: [] } }),
           getPayouts: (_req, res) => res.json({ data: { payouts: [] } }),
           getMentorRating: (_req, res) => res.json({ data: { avgRating: 4 } }),
-          queueInvoiceEmail: (_req, res) => res.status(202).json({ data: { accepted: true } }),
+          queueInvoiceEmail: (_req, res) =>
+            res.status(202).json({ data: { accepted: true } }),
         },
       }),
       internalReminderRouter: createInternalReminderRouter({

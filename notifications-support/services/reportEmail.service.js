@@ -51,43 +51,45 @@ const createReportEmailService = ({ sendEmail, emailDeliveryRepository }) => {
             "",
             "LeapMentor",
           ].join("\n"),
-          attachments: [{
-            filename: `Invoice-${event.invoiceNumber}.pdf`,
-            content: Buffer.from(event.invoicePdfBase64 || "", "base64"),
-            contentType: "application/pdf",
-          }],
+          attachments: [
+            {
+              filename: `Invoice-${event.invoiceNumber}.pdf`,
+              content: Buffer.from(event.invoicePdfBase64 || "", "base64"),
+              contentType: "application/pdf",
+            },
+          ],
         }
       : isSubmitted
         ? {
-          to: event.reporterEmail,
-          subject: "We received your LeapMentor report",
-          text: [
-            `Hi ${event.reporterName || "there"},`,
-            "",
-            "We received your report and our team will review it.",
-            `Report category: ${event.complaintType}`,
-            `Your description: ${event.description}`,
-            "",
-            "LeapMentor Support",
-          ].join("\n"),
-        }
+            to: event.reporterEmail,
+            subject: "We received your LeapMentor report",
+            text: [
+              `Hi ${event.reporterName || "there"},`,
+              "",
+              "We received your report and our team will review it.",
+              `Report category: ${event.complaintType}`,
+              `Your description: ${event.description}`,
+              "",
+              "LeapMentor Support",
+            ].join("\n"),
+          }
         : {
-          to: event.reporterEmail,
-          subject:
-            event.status === "resolved"
-              ? "Your LeapMentor report was resolved"
-              : "Your LeapMentor report was reviewed",
-          text: [
-            `Hi ${event.reporterName || "there"},`,
-            "",
-            `Our team reviewed your ${event.complaintType} report. Status: ${event.status}.`,
-            event.adminNote ? `Admin note: ${event.adminNote}` : "",
-            "",
-            "LeapMentor Support",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        };
+            to: event.reporterEmail,
+            subject:
+              event.status === "resolved"
+                ? "Your LeapMentor report was resolved"
+                : "Your LeapMentor report was reviewed",
+            text: [
+              `Hi ${event.reporterName || "there"},`,
+              "",
+              `Our team reviewed your ${event.complaintType} report. Status: ${event.status}.`,
+              event.adminNote ? `Admin note: ${event.adminNote}` : "",
+              "",
+              "LeapMentor Support",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          };
 
     try {
       await sendEmail(message);

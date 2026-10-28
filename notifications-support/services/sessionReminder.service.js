@@ -1,7 +1,16 @@
+const crypto = require("node:crypto");
+
 const REMINDER_WINDOWS = [
   { type: "24h", minMinutes: 1430, maxMinutes: 1450 },
   { type: "1h", minMinutes: 50, maxMinutes: 70 },
 ];
+const REMINDER_LOCK_KEY = "notifications-support:session-reminders:leader";
+const REMINDER_LOCK_TTL_MS = 60_000;
+const REMINDER_LOCK_RENEW_MS = 20_000;
+const RENEW_LOCK_SCRIPT =
+  "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) else return 0 end";
+const RELEASE_LOCK_SCRIPT =
+  "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end";
 
 const idOf = (value) =>
   value?._id?.toString?.() || value?.id?.toString?.() || value?.toString?.();
@@ -18,19 +27,30 @@ const toISTDate = (date, time) => {
 const createSessionReminderService = ({
   workspaceClient,
   notificationService,
+  lockClient = null,
+  distributedLockEnabled = false,
   now = () => new Date(),
   logger = console,
 }) => {
   let timer = null;
   let running = false;
+  let localScanRunning = false;
 
-  const runOnce = async () => {
+  const scanSessions = async (isLockHeld = () => true) => {
     if (!workspaceClient.isConfigured())
       return { skipped: true, reason: "workspace-client-not-configured" };
     const currentTime = now();
     const sessions = await workspaceClient.listUpcomingSessions();
     let delivered = 0;
     for (const session of sessions) {
+      if (!isLockHeld()) {
+        return {
+          scanned: sessions.length,
+          delivered,
+          skipped: true,
+          reason: "reminder-lock-lost",
+        };
+      }
       const slot = session.confirmedSlot;
       const sessionTime =
         slot?.date && slot?.startTime
@@ -65,6 +85,14 @@ const createSessionReminderService = ({
         },
       ];
       for (const recipient of recipients) {
+        if (!isLockHeld()) {
+          return {
+            scanned: sessions.length,
+            delivered,
+            skipped: true,
+            reason: "reminder-lock-lost",
+          };
+        }
         await notificationService.createFromEvent({
           sourceEventId: `session-reminder:${session.requestId}:${window.type}:${recipient.id}`,
           recipient: recipient.id,
@@ -77,6 +105,66 @@ const createSessionReminderService = ({
       }
     }
     return { scanned: sessions.length, delivered };
+  };
+
+  const runOnce = async () => {
+    if (localScanRunning) {
+      return { skipped: true, reason: "local-scan-in-progress" };
+    }
+    localScanRunning = true;
+    try {
+      if (!distributedLockEnabled) return await scanSessions();
+      if (
+        typeof lockClient?.set !== "function" ||
+        typeof lockClient?.eval !== "function"
+      ) {
+        return { skipped: true, reason: "distributed-lock-not-configured" };
+      }
+
+      const lockToken = crypto.randomUUID();
+      const acquired = await lockClient.set(REMINDER_LOCK_KEY, lockToken, {
+        NX: true,
+        PX: REMINDER_LOCK_TTL_MS,
+      });
+      if (acquired !== "OK")
+        return { skipped: true, reason: "another-worker-active" };
+
+      let lockHeld = true;
+      let renewing = false;
+      const renewTimer = setInterval(async () => {
+        if (renewing || !lockHeld) return;
+        renewing = true;
+        try {
+          const renewed = await lockClient.eval(RENEW_LOCK_SCRIPT, {
+            keys: [REMINDER_LOCK_KEY],
+            arguments: [lockToken, String(REMINDER_LOCK_TTL_MS)],
+          });
+          if (renewed !== 1) lockHeld = false;
+        } catch {
+          lockHeld = false;
+        } finally {
+          renewing = false;
+        }
+      }, REMINDER_LOCK_RENEW_MS);
+      renewTimer.unref?.();
+      try {
+        return await scanSessions(() => lockHeld);
+      } finally {
+        clearInterval(renewTimer);
+        await lockClient
+          .eval(RELEASE_LOCK_SCRIPT, {
+            keys: [REMINDER_LOCK_KEY],
+            arguments: [lockToken],
+          })
+          .catch((error) =>
+            logger.warn?.("Reminder lock release failed", {
+              error: error.message,
+            }),
+          );
+      }
+    } finally {
+      localScanRunning = false;
+    }
   };
 
   const start = () => {

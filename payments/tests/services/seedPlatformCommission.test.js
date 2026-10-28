@@ -8,7 +8,10 @@ test("seeds the configured commission only when no value exists", async () => {
   const result = await seedPlatformCommission({
     defaultRate: 18,
     settingModel: {
-      updateOne: async (...args) => { calls.push(args); return { upsertedCount: 1 }; },
+      updateOne: async (...args) => {
+        calls.push(args);
+        return { upsertedCount: 1 };
+      },
     },
   });
   assert.deepEqual(result, { inserted: true, rate: 18 });
@@ -25,5 +28,8 @@ test("does not replace an existing commission and rejects invalid seed rates", a
     settingModel: { updateOne: async () => ({ upsertedCount: 0 }) },
   });
   assert.deepEqual(result, { inserted: false, rate: 20 });
-  await assert.rejects(seedPlatformCommission({ defaultRate: 101, settingModel: {} }), /between 0 and 100/);
+  await assert.rejects(
+    seedPlatformCommission({ defaultRate: 101, settingModel: {} }),
+    /between 0 and 100/,
+  );
 });
