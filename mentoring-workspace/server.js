@@ -11,6 +11,7 @@ const io = new Server(httpServer, {
   cors: { origin: env.clientUrl, credentials: true },
 });
 io.use(container.socketAuth);
+container.realtimePublisher.attach(io);
 container.createMessageSocketHandler({
   io,
   messageService: container.messageService,

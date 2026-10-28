@@ -12,18 +12,15 @@ module.exports = {
     getEnv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000"),
   ),
   redisUrl: getEnv("REDIS_URL", "redis://localhost:6379"),
-  jwtAccessSecret: getEnv(
-    "JWT_ACCESS_SECRET",
-    "development-access-secret",
-  ),
-  jwtRefreshSecret: getEnv(
-    "JWT_REFRESH_SECRET",
-    "development-refresh-secret",
-  ),
+  jwtAccessSecret: getEnv("JWT_ACCESS_SECRET", "development-access-secret"),
+  jwtRefreshSecret: getEnv("JWT_REFRESH_SECRET", "development-refresh-secret"),
   jwtAccessExpiresIn: getEnv("JWT_ACCESS_EXPIRES_IN", "15m"),
   jwtRefreshExpiresIn: getEnv("JWT_REFRESH_EXPIRES_IN", "7d"),
   appBaseUrl: getEnv("APP_BASE_URL", "http://localhost:5173"),
-  clientUrl: getEnv("CLIENT_URL", getEnv("APP_BASE_URL", "http://localhost:5173")),
+  clientUrl: getEnv(
+    "CLIENT_URL",
+    getEnv("APP_BASE_URL", "http://localhost:5173"),
+  ),
   oauthStateSecret: getEnv(
     "OAUTH_STATE_SECRET",
     "development-oauth-state-secret",
@@ -46,14 +43,10 @@ module.exports = {
     pass: getEnv("SMTP_PASS", ""),
     fromEmail: getEnv("FROM_EMAIL", ""),
   },
-  paymentsServiceUrl: getEnv(
-    "PAYMENTS_SERVICE_URL",
-    "http://localhost:5004",
-  ),
+  paymentsServiceUrl: getEnv("PAYMENTS_SERVICE_URL", "http://localhost:5004"),
   paymentsServiceToken: getEnv("PAYMENTS_SERVICE_TOKEN", ""),
-  internalHttpTimeoutMs: Number(
-    getEnv("INTERNAL_HTTP_TIMEOUT_MS", "3000"),
-  ),
+  internalHttpTimeoutMs: Number(getEnv("INTERNAL_HTTP_TIMEOUT_MS", "3000")),
   profileServiceToken: getEnv("PROFILE_SERVICE_TOKEN", ""),
+  workspaceServiceToken: getEnv("WORKSPACE_SERVICE_TOKEN", ""),
   adminServiceToken: getEnv("ADMIN_SERVICE_TOKEN", ""),
 };

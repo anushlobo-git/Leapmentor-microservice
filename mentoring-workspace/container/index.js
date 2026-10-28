@@ -49,6 +49,7 @@ const { createClient } = require("redis");
 const createNotificationStreamPublisher = require("../clients/notificationStream");
 const createSocketAuth = require("../socket/socketAuth");
 const createMessageSocketHandler = require("../socket/messageSocket");
+const createRealtimePublisher = require("../socket/realtimePublisher");
 const createOutboxRepository = require("../repositories/outbox.repository");
 const createGoalRepository = require("../repositories/goal.repository");
 const createMilestoneRepository = require("../repositories/milestone.repository");
@@ -56,6 +57,28 @@ const createGoalService = require("../services/goal.service");
 const createGoalController = require("../controllers/goal.controller");
 const createGoalRouter = require("../routes/goal.routes");
 const goalValidations = require("../middleware/goalValidation");
+const PrivateNote = require("../models/PrivateNote");
+const createPrivateNoteRepository = require("../repositories/privateNote.repository");
+const createPrivateNoteService = require("../services/privateNote.service");
+const createPrivateNoteController = require("../controllers/privateNote.controller");
+const createPrivateNoteRouter = require("../routes/privateNote.routes");
+const privateNoteValidations = require("../middleware/privateNoteValidation");
+const streamifier = require("streamifier");
+const {
+  cloudinary,
+  configured: cloudinaryConfigured,
+} = require("../config/cloudinary");
+const Note = require("../models/Note");
+const createNoteRepository = require("../repositories/note.repository");
+const createCloudinaryClient = require("../clients/cloudinaryClient");
+const createIdentityClient = require("../clients/identityClient");
+const createNoteService = require("../services/note.service");
+const createNoteController = require("../controllers/note.controller");
+const createNoteRouter = require("../routes/note.routes");
+const noteValidations = require("../middleware/noteValidation");
+const { createNoteUpload } = require("../middleware/noteUpload");
+const { getFileType } = require("../utils/fileType");
+
 
 const health = { isReady: () => db.isConnected() };
 const connectRequestRepository = createConnectRequestRepository(ConnectRequest);
@@ -157,10 +180,57 @@ const messageController = createMessageController({ messageService });
 const messageRouter = createMessageRouter({ controller: messageController, authenticate, validations: messageValidations });
 const goalRepository = createGoalRepository(Goal);
 const milestoneRepository = createMilestoneRepository(Milestone);
-const goalService = createGoalService({ connectRequestRepository, goalRepository, milestoneRepository });
+const realtimePublisher = createRealtimePublisher();
+const goalService = createGoalService({
+  connectRequestRepository,
+  goalRepository,
+  milestoneRepository,
+  realtimePublisher,
+});
+
 const goalController = createGoalController({ goalService });
 const goalRouter = createGoalRouter({ controller: goalController, authenticate, validations: goalValidations });
+const privateNoteRepository = createPrivateNoteRepository(PrivateNote);
+const privateNoteService = createPrivateNoteService({
+  privateNoteRepository,
+  connectRequestRepository,
+});
+const privateNoteController = createPrivateNoteController({
+  privateNoteService,
+});
+const privateNoteRouter = createPrivateNoteRouter({
+  controller: privateNoteController,
+  authenticate,
+  validations: privateNoteValidations,
+});
+const identityHttpClient = createInternalHttpClient({
+  baseUrl: env.identityServiceUrl,
+  serviceToken: env.identityServiceToken,
+  timeoutMs: env.internalRequestTimeoutMs,
+});
+const identityClient = createIdentityClient({ httpClient: identityHttpClient });
+const cloudinaryClient = createCloudinaryClient({
+  cloudinary,
+  streamifier,
+  configured: cloudinaryConfigured,
+});
+const noteRepository = createNoteRepository(Note);
+const noteService = createNoteService({
+  noteRepository,
+  connectRequestRepository,
+  cloudinaryClient,
+  identityClient,
+  getFileType,
+});
+const noteController = createNoteController({ noteService });
+const noteRouter = createNoteRouter({
+  controller: noteController,
+  authenticate,
+  upload: createNoteUpload(),
+  validations: noteValidations,
+});
 const socketAuth = createSocketAuth({ accessSecret: env.jwtAccessSecret });
+
 
 module.exports = {
   health,
@@ -200,11 +270,22 @@ module.exports = {
   goalService,
   goalController,
   goalRouter,
+  privateNoteRepository,
+  privateNoteService,
+  privateNoteController,
+  privateNoteRouter,
+  noteRepository,
+  noteService,
+  noteController,
+  noteRouter,
+  identityClient,
+  cloudinaryClient,
   notificationsHttpClient,
   notificationClient,
   notificationStreamPublisher,
   outboxRepository,
   socketAuth,
+  realtimePublisher,
   createMessageSocketHandler,
   database: db,
 };

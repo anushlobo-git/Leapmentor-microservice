@@ -4,6 +4,7 @@ const { toGoalDTO, toMilestoneDTO } = require("../utils/goal.mapper");
 
 const STATUS_ONGOING = "ongoing";
 const VALID_GOAL_STATUSES = new Set(["active", "completed", "abandoned"]);
+const DUPLICATE_KEY_ERROR = 11000;
 
 const EVENT_GOAL_CREATED = "goal_created";
 const EVENT_GOAL_UPDATED = "goal_updated";
@@ -14,16 +15,16 @@ const EVENT_MILESTONE_DELETED = "milestone_deleted";
 /**
  * Goal & Milestone business service for Mentoring Workspace.
  *
- * socketHandler is the injected realtime publisher. The service calls
- * socketHandler.emitToRoom(roomId, event, data) when available so that
- * live clients see goal/milestone changes immediately. If the publisher is
- * absent (tests, non-socket environments) the calls are silently skipped.
+ * realtimePublisher is the injected realtime port
+ * ({ publishToRoom(roomId, event, payload) }). When it is absent, or when it
+ * throws, the HTTP operation still succeeds: realtime delivery is a side
+ * effect and must never fail a persisted change.
  */
 const createGoalService = ({
   connectRequestRepository,
   goalRepository,
   milestoneRepository,
-  socketHandler = null,
+  realtimePublisher = null,
 }) => {
   // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -40,9 +41,13 @@ const createGoalService = ({
 
   const _emitToRoom = (connectRequestId, event, data) => {
     try {
-      socketHandler?.emitToRoom?.(connectRequestId.toString(), event, data);
+      realtimePublisher?.publishToRoom?.(
+        connectRequestId.toString(),
+        event,
+        data,
+      );
     } catch (_) {
-      // socket errors must never propagate to the HTTP response
+      // realtime errors must never propagate to the HTTP response
     }
   };
 
@@ -56,33 +61,59 @@ const createGoalService = ({
     endDate,
     userId,
   }) => {
-    if (!connectRequestId) throw new AppError("connectRequestId is required", 400);
+    if (!connectRequestId)
+      throw new AppError("connectRequestId is required", 400);
     if (!title?.trim()) throw new AppError("title is required", 400);
 
     const session = await connectRequestRepository.findById(connectRequestId);
-    if (!session) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+    if (!session)
+      throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     if (session.status !== STATUS_ONGOING) {
-      throw new AppError("Goals can only be set for ongoing sessions", 400, "SESSION_NOT_ONGOING");
+      throw new AppError(
+        "Goals can only be set for ongoing sessions",
+        400,
+        "SESSION_NOT_ONGOING",
+      );
     }
 
     _assertParticipant(session, userId);
 
-    const existing = await goalRepository.findOneByConnectRequestLean(connectRequestId);
-    if (existing) throw new AppError("A goal already exists for this session", 409, "GOAL_EXISTS");
+    const existing =
+      await goalRepository.findOneByConnectRequestLean(connectRequestId);
+    if (existing)
+      throw new AppError(
+        "A goal already exists for this session",
+        409,
+        "GOAL_EXISTS",
+      );
 
     const mentorId = session.mentor?._id ?? session.mentor;
     const menteeId = session.mentee?._id ?? session.mentee;
 
-    const goal = await goalRepository.create({
-      connectRequest: connectRequestId,
-      mentor: mentorId,
-      mentee: menteeId,
-      title: title.trim(),
-      description: description?.trim() || "",
-      startDate: startDate || null,
-      endDate: endDate || null,
-      createdBy: userId,
-    });
+    let goal;
+    try {
+      goal = await goalRepository.create({
+        connectRequest: connectRequestId,
+        mentor: mentorId,
+        mentee: menteeId,
+        title: title.trim(),
+        description: description?.trim() || "",
+        startDate: startDate || null,
+        endDate: endDate || null,
+        createdBy: userId,
+      });
+    } catch (error) {
+      // Two simultaneous creates can both pass the check above; the unique
+      // connectRequest index decides the winner.
+      if (error?.code === DUPLICATE_KEY_ERROR) {
+        throw new AppError(
+          "A goal already exists for this session",
+          409,
+          "GOAL_EXISTS",
+        );
+      }
+      throw error;
+    }
 
     const dto = toGoalDTO(goal);
     _emitToRoom(connectRequestId, EVENT_GOAL_CREATED, { goal: dto });
@@ -91,10 +122,12 @@ const createGoalService = ({
 
   const getGoalByConnection = async (connectRequestId, userId) => {
     const session = await connectRequestRepository.findById(connectRequestId);
-    if (!session) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+    if (!session)
+      throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     _assertParticipant(session, userId);
 
-    const goal = await goalRepository.findOneByConnectRequestLean(connectRequestId);
+    const goal =
+      await goalRepository.findOneByConnectRequestLean(connectRequestId);
     if (!goal) return { goal: null, milestones: [] };
 
     const milestones = await milestoneRepository.findAllByGoalSorted(goal._id);
@@ -116,8 +149,11 @@ const createGoalService = ({
     const goal = await goalRepository.findById(goalId);
     if (!goal) throw new AppError("Goal not found", 404, "GOAL_NOT_FOUND");
 
-    const session = await connectRequestRepository.findById(goal.connectRequest);
-    if (!session) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+    const session = await connectRequestRepository.findById(
+      goal.connectRequest,
+    );
+    if (!session)
+      throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     _assertParticipant(session, userId);
 
     if (title !== undefined) {
@@ -128,7 +164,8 @@ const createGoalService = ({
     if (startDate !== undefined) goal.startDate = startDate || null;
     if (endDate !== undefined) goal.endDate = endDate || null;
     if (status !== undefined) {
-      if (!VALID_GOAL_STATUSES.has(status)) throw new AppError("Invalid status", 400, "INVALID_STATUS");
+      if (!VALID_GOAL_STATUSES.has(status))
+        throw new AppError("Invalid status", 400, "INVALID_STATUS");
       goal.status = status;
     }
 
@@ -151,8 +188,11 @@ const createGoalService = ({
     const goal = await goalRepository.findById(goalId);
     if (!goal) throw new AppError("Goal not found", 404, "GOAL_NOT_FOUND");
 
-    const session = await connectRequestRepository.findById(goal.connectRequest);
-    if (!session) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+    const session = await connectRequestRepository.findById(
+      goal.connectRequest,
+    );
+    if (!session)
+      throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     _assertParticipant(session, userId);
 
     if (!title?.trim()) throw new AppError("title is required", 400);
@@ -182,10 +222,14 @@ const createGoalService = ({
     userId,
   }) => {
     const milestone = await milestoneRepository.findById(milestoneId);
-    if (!milestone) throw new AppError("Milestone not found", 404, "MILESTONE_NOT_FOUND");
+    if (!milestone)
+      throw new AppError("Milestone not found", 404, "MILESTONE_NOT_FOUND");
 
-    const session = await connectRequestRepository.findById(milestone.connectRequest);
-    if (!session) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+    const session = await connectRequestRepository.findById(
+      milestone.connectRequest,
+    );
+    if (!session)
+      throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     _assertParticipant(session, userId);
 
     if (title !== undefined) {
@@ -202,16 +246,22 @@ const createGoalService = ({
     await milestoneRepository.save(milestone);
 
     const dto = toMilestoneDTO(milestone);
-    _emitToRoom(milestone.connectRequest, EVENT_MILESTONE_UPDATED, { milestone: dto });
+    _emitToRoom(milestone.connectRequest, EVENT_MILESTONE_UPDATED, {
+      milestone: dto,
+    });
     return dto;
   };
 
   const deleteMilestone = async (milestoneId, userId) => {
     const milestone = await milestoneRepository.findById(milestoneId);
-    if (!milestone) throw new AppError("Milestone not found", 404, "MILESTONE_NOT_FOUND");
+    if (!milestone)
+      throw new AppError("Milestone not found", 404, "MILESTONE_NOT_FOUND");
 
-    const session = await connectRequestRepository.findById(milestone.connectRequest);
-    if (!session) throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+    const session = await connectRequestRepository.findById(
+      milestone.connectRequest,
+    );
+    if (!session)
+      throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     _assertParticipant(session, userId);
 
     const connectRequestId = milestone.connectRequest;

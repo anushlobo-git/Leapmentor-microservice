@@ -116,6 +116,20 @@ const createApp = (container = {}) => {
     );
   }
 
+    if (container.privateNoteRouter) {
+      app.use(
+        "/api/v1/private-notes",
+        createRequireReady(container),
+        container.privateNoteRouter,
+      );
+    }
+     if (container.noteRouter) {
+       app.use(
+         "/api/v1/notes",
+         createRequireReady(container),
+         container.noteRouter,
+       );
+     }
   app.use(errorHandler);
 
   return app;

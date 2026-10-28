@@ -31,22 +31,24 @@ Authenticated browser-facing routes use `/api/v1`:
 | `/slot-locks` | Lock/unlock slots, unlock all locks for a user, and read a mentor's active locks |
 | `/sessions` | Read slots; set meeting links; mark completion; add, cancel, or reschedule slots |
 | `/messages` | Read a connect request's message history and unread count |
-
+| `/private-notes` | Create, list, update, and delete the caller's private text notes |
 Trusted internal routes use `/internal/v1` and require service authentication.
 They expose availability blockers, payment context/state, and the user,
 engagement, and report data needed by Admin & Moderation.
+| `/notes` | Upload (multipart, 10 MB), list shared, list private, and delete shared file notes |
 
 ## Project structure
 
 ```text
 app.js                 Express middleware and route mounting
 server.js              HTTP and Socket.IO server, database/stream lifecycle
-clients/               Identity, Profile, and Notifications integrations
+clients/               Identity, Profile, Notifications and Cloudinary integrations.
 config/                Environment and database configuration
 container/             Dependency wiring
 controllers/            HTTP request handlers
 middleware/             Authentication, internal auth, validation, and errors
-models/                 ConnectRequest, Message, Report, and SlotLock
+models/                 ConnectRequest, Message, Goal, Milestone, PrivateNote, Note,
+                        OutboxEvent, Report, and SlotLock.
 repositories/           Workspace data access
 routes/                 Browser and internal API route definitions
 services/               Requests, sessions, messages, and slot locks
@@ -70,6 +72,11 @@ Streams and the Notifications URL/token configure asynchronous notification
 delivery; use the matching shared access-token and internal-service
 configuration across services. See [`.env.example`](./.env.example) for all
 settings. Do not commit `.env` or real credentials.
+
+Shared file notes also need `IDENTITY_SERVICE_URL`, `IDENTITY_SERVICE_TOKEN`
+(equal to the `WORKSPACE_SERVICE_TOKEN` in Identity's `.env`) and
+`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`. Without
+Cloudinary credentials, uploads return 503 `UPLOAD_PROVIDER_NOT_CONFIGURED`.
 
 Run the tests with:
 

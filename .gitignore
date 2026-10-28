@@ -21,6 +21,7 @@ build/
 
 # Local developer helpers and notes
 /README.md
+/migration-docs/
 start-local.sh
 setup-local-env.sh
 build-images.sh

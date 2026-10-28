@@ -11,6 +11,24 @@ const invalid = (message) => {
   return error;
 };
 
+// Express 5 leaves req.body undefined when a request has no body. Normalise it
+// so validators and controllers can read fields without throwing a TypeError.
+const normaliseBody = (req) => {
+  if (req.body === undefined || req.body === null) req.body = {};
+  return req.body;
+};
+
+const assertOptionalString = (value, field) => {
+  if (value !== undefined && value !== null && typeof value !== "string")
+    throw invalid(`${field} must be a string`);
+};
+
+const assertOptionalDate = (value, field) => {
+  if (value === undefined || value === null || value === "") return;
+  if (typeof value !== "string" || !DATE.test(value))
+    throw invalid(`${field} must be in YYYY-MM-DD format`);
+};
+
 // ── param validators ─────────────────────────────────────────────────────────
 
 const connectRequestIdParam = (req, _res, next) =>
@@ -32,14 +50,14 @@ const milestoneIdParam = (req, _res, next) =>
 
 const validateCreateGoal = (req, _res, next) => {
   try {
-    if (!OBJECT_ID.test(String(req.body?.connectRequestId || "")))
+    const body = normaliseBody(req);
+    if (!OBJECT_ID.test(String(body.connectRequestId || "")))
       throw invalid("connectRequestId must be a valid ObjectId");
-    if (!req.body?.title?.trim())
+    if (typeof body.title !== "string" || !body.title.trim())
       throw invalid("title is required");
-    if (req.body.startDate !== undefined && req.body.startDate !== null && !DATE.test(req.body.startDate))
-      throw invalid("startDate must be in YYYY-MM-DD format");
-    if (req.body.endDate !== undefined && req.body.endDate !== null && !DATE.test(req.body.endDate))
-      throw invalid("endDate must be in YYYY-MM-DD format");
+    assertOptionalString(body.description, "description");
+    assertOptionalDate(body.startDate, "startDate");
+    assertOptionalDate(body.endDate, "endDate");
     return next();
   } catch (e) {
     return next(e);
@@ -48,16 +66,20 @@ const validateCreateGoal = (req, _res, next) => {
 
 const validateUpdateGoal = (req, _res, next) => {
   try {
+    const body = normaliseBody(req);
     if (!OBJECT_ID.test(String(req.params.goalId || "")))
       throw invalid("goalId must be a valid ObjectId");
-    if (req.body.title !== undefined && !req.body.title.trim())
+    if (
+      body.title !== undefined &&
+      (typeof body.title !== "string" || !body.title.trim())
+    )
       throw invalid("title cannot be empty");
-    if (req.body.status !== undefined && !VALID_STATUSES.has(req.body.status))
+    if (body.description !== undefined && typeof body.description !== "string")
+      throw invalid("description must be a string");
+    if (body.status !== undefined && !VALID_STATUSES.has(body.status))
       throw invalid("status must be active, completed, or abandoned");
-    if (req.body.startDate !== undefined && req.body.startDate !== null && !DATE.test(req.body.startDate))
-      throw invalid("startDate must be in YYYY-MM-DD format");
-    if (req.body.endDate !== undefined && req.body.endDate !== null && !DATE.test(req.body.endDate))
-      throw invalid("endDate must be in YYYY-MM-DD format");
+    assertOptionalDate(body.startDate, "startDate");
+    assertOptionalDate(body.endDate, "endDate");
     return next();
   } catch (e) {
     return next(e);
@@ -66,12 +88,13 @@ const validateUpdateGoal = (req, _res, next) => {
 
 const validateCreateMilestone = (req, _res, next) => {
   try {
+    const body = normaliseBody(req);
     if (!OBJECT_ID.test(String(req.params.goalId || "")))
       throw invalid("goalId must be a valid ObjectId");
-    if (!req.body?.title?.trim())
+    if (typeof body.title !== "string" || !body.title.trim())
       throw invalid("title is required");
-    if (req.body.dueDate !== undefined && req.body.dueDate !== null && !DATE.test(req.body.dueDate))
-      throw invalid("dueDate must be in YYYY-MM-DD format");
+    assertOptionalString(body.description, "description");
+    assertOptionalDate(body.dueDate, "dueDate");
     return next();
   } catch (e) {
     return next(e);
@@ -80,11 +103,17 @@ const validateCreateMilestone = (req, _res, next) => {
 
 const validateUpdateMilestone = (req, _res, next) => {
   try {
+    const body = normaliseBody(req);
     if (!OBJECT_ID.test(String(req.params.milestoneId || "")))
       throw invalid("milestoneId must be a valid ObjectId");
-    if (req.body.title !== undefined && !req.body.title.trim())
+    if (
+      body.title !== undefined &&
+      (typeof body.title !== "string" || !body.title.trim())
+    )
       throw invalid("title cannot be empty");
-    if (req.body.isCompleted !== undefined && typeof req.body.isCompleted !== "boolean")
+    if (body.description !== undefined && typeof body.description !== "string")
+      throw invalid("description must be a string");
+    if (body.isCompleted !== undefined && typeof body.isCompleted !== "boolean")
       throw invalid("isCompleted must be a boolean");
     return next();
   } catch (e) {

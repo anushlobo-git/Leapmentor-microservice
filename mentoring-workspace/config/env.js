@@ -13,12 +13,27 @@ module.exports = {
   ),
   redisUrl: getEnv("REDIS_URL", "redis://localhost:6379"),
   redisEnabled: getEnv("REDIS_ENABLED", "false") === "true",
-  notificationStreamName: getEnv("NOTIFICATION_STREAM_NAME", "leapmentor.workspace.events"),
+  notificationStreamName: getEnv(
+    "NOTIFICATION_STREAM_NAME",
+    "leapmentor.workspace.events",
+  ),
   clientUrl: getEnv("CLIENT_URL", "http://localhost:5173"),
   internalServiceToken: getEnv("WORKSPACE_SERVICE_TOKEN", ""),
   adminServiceToken: getEnv("ADMIN_SERVICE_TOKEN", ""),
   jwtAccessSecret: getEnv("JWT_ACCESS_SECRET", "development-access-secret"),
-  notificationsServiceUrl: getEnv("NOTIFICATIONS_SERVICE_URL", "http://localhost:5005"),
+  notificationsServiceUrl: getEnv(
+    "NOTIFICATIONS_SERVICE_URL",
+    "http://localhost:5005",
+  ),
   notificationsServiceToken: getEnv("NOTIFICATIONS_SERVICE_TOKEN", ""),
-  internalRequestTimeoutMs: Number(getEnv("INTERNAL_REQUEST_TIMEOUT_MS", "3000")),
+  internalRequestTimeoutMs: Number(
+    getEnv("INTERNAL_REQUEST_TIMEOUT_MS", "3000"),
+  ),
+  identityServiceUrl: getEnv("IDENTITY_SERVICE_URL", "http://localhost:5001"),
+  identityServiceToken: getEnv("IDENTITY_SERVICE_TOKEN", ""),
+  cloudinary: {
+    cloudName: getEnv("CLOUDINARY_CLOUD_NAME", ""),
+    apiKey: getEnv("CLOUDINARY_API_KEY", ""),
+    apiSecret: getEnv("CLOUDINARY_API_SECRET", ""),
+  },
 };
