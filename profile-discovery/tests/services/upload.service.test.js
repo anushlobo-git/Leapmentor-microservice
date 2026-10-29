@@ -6,25 +6,41 @@ const createUploadService = require("../../services/upload.service");
 const createService = ({
   configured = true,
   profile = { _id: "profile-1" },
+  uploadErrors = [],
+  directUpload = false,
 } = {}) => {
   const uploads = [];
   const destroyed = [];
   const queuedEmails = [];
-  const cloudinary = {
-    uploader: {
+  let uploadAttempt = 0;
+  const uploader = {
       upload_stream: (options, callback) => {
         uploads.push(options);
-        callback(null, {
-          secure_url: `https://cdn.example/${uploads.length}`,
-          public_id: `public-${uploads.length}`,
-        });
+        const uploadError = uploadErrors[uploadAttempt];
+        uploadAttempt += 1;
+        if (uploadError) callback(uploadError);
+        else {
+          callback(null, {
+            secure_url: `https://cdn.example/${uploads.length}`,
+            public_id: `public-${uploads.length}`,
+          });
+        }
         return { pipe: () => undefined };
       },
       destroy: async (publicId) => {
         destroyed.push(publicId);
       },
-    },
   };
+  if (directUpload) {
+    uploader.upload = async (dataUri, options) => {
+      uploads.push({ dataUri, ...options });
+      return {
+        secure_url: `https://cdn.example/${uploads.length}`,
+        public_id: `public-${uploads.length}`,
+      };
+    };
+  }
+  const cloudinary = { uploader };
   const repository = {
     findOneAndUpdateByUserId: async () => profile,
   };
@@ -136,4 +152,41 @@ test("returns a clear provider error when Cloudinary is not configured", async (
     }),
     { statusCode: 503, code: "UPLOAD_PROVIDER_NOT_CONFIGURED" },
   );
+});
+
+test("retries transient Cloudinary network failures before succeeding", async () => {
+  const { service, uploads } = createService({
+    uploadErrors: [
+      Object.assign(new Error("connect timeout"), { code: "ETIMEDOUT" }),
+      Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+    ],
+  });
+
+  const result = await service.processVerificationDocuments(
+    { _id: "user-1" },
+    { phoneNumber: "12345" },
+    { resume: [{ originalname: "resume.pdf", buffer: Buffer.from("resume") }] },
+  );
+
+  assert.deepEqual(result, { mapped: "profile-1" });
+  assert.equal(uploads.length, 3);
+});
+
+test("uses Cloudinary regular upload with a MIME-aware data URI when available", async () => {
+  const { service, uploads } = createService({ directUpload: true });
+
+  const result = await service.processVerificationDocuments(
+    { _id: "user-1" },
+    { phoneNumber: "12345" },
+    {
+      resume: [{
+        originalname: "resume.pdf",
+        mimetype: "application/pdf",
+        buffer: Buffer.from("resume"),
+      }],
+    },
+  );
+
+  assert.deepEqual(result, { mapped: "profile-1" });
+  assert.match(uploads[0].dataUri, /^data:application\/pdf;base64,/);
 });

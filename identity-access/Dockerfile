@@ -13,5 +13,9 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY --chown=app:app . ./
 USER app
 EXPOSE 5001
+#HEALTHCHECK tells Docker: “please check whether this container is healthy.”
+#--interval=30s → check every 30 seconds
+#--timeout=5s → the health check must finish within 5 seconds
+#CMD node -e "..." → runs a small inline Node.js script
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "fetch('http://127.0.0.1:' + process.env.PORT + '/health/live').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["node", "server.js"]

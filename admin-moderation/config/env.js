@@ -26,6 +26,11 @@ module.exports = {
   ),
   adminAccessExpiresIn: getEnv("ADMIN_ACCESS_EXPIRES_IN", "15m"),
   adminRefreshExpiresIn: getEnv("ADMIN_REFRESH_EXPIRES_IN", "7d"),
+  admin: {
+    email: getEnv("ADMIN_EMAIL", ""),
+    password: getEnv("ADMIN_PASSWORD", ""),
+    name: getEnv("ADMIN_NAME", "Super Admin"),
+  },
   identityServiceUrl: getEnv("IDENTITY_SERVICE_URL", "http://localhost:5001"),
   profileServiceUrl: getEnv("PROFILE_SERVICE_URL", "http://localhost:5002"),
   workspaceServiceUrl: getEnv("WORKSPACE_SERVICE_URL", "http://localhost:5003"),

@@ -1,3 +1,35 @@
+const DEFAULT_PAGINATION = {
+  totalCount: 0,
+  currentPage: 1,
+  totalPages: 0,
+  hasMore: false,
+};
+
+const normalizePagination = (pagination, page, limit) => {
+  const source = pagination && typeof pagination === "object" ? pagination : {};
+  const totalCount = Number.isFinite(Number(source.totalCount))
+    ? Math.max(0, Number(source.totalCount))
+    : DEFAULT_PAGINATION.totalCount;
+  const currentPage = Number.isFinite(Number(source.currentPage))
+    ? Math.max(1, Number(source.currentPage))
+    : page;
+  const totalPages = Number.isFinite(Number(source.totalPages))
+    ? Math.max(0, Number(source.totalPages))
+    : totalCount > 0
+      ? Math.ceil(totalCount / limit)
+      : DEFAULT_PAGINATION.totalPages;
+
+  return {
+    totalCount,
+    currentPage,
+    totalPages,
+    hasMore:
+      typeof source.hasMore === "boolean"
+        ? source.hasMore
+        : currentPage < totalPages,
+  };
+};
+
 const createAdminPaymentsService = ({
   paymentsClient,
   workspaceClient,
@@ -36,19 +68,16 @@ const createAdminPaymentsService = ({
       if (!userIds.length) {
         return {
           transactions: [],
-          pagination: {
-            totalCount: 0,
-            currentPage: 1,
-            totalPages: 0,
-            hasMore: false,
-          },
+          pagination: { ...DEFAULT_PAGINATION },
         };
       }
     }
+    const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+    const limit = Math.max(1, Number.parseInt(query.limit, 10) || 15);
     const response = await paymentsClient.getAdminPaymentTransactions(
       {
-        page: query.page || 1,
-        limit: query.limit || 15,
+        page,
+        limit,
         type: query.type,
         userIds: userIds.join(","),
       },
@@ -74,12 +103,7 @@ const createAdminPaymentsService = ({
     );
     return {
       transactions,
-      pagination: data.pagination || {
-        totalCount: 0,
-        currentPage: 1,
-        totalPages: 0,
-        hasMore: false,
-      },
+      pagination: normalizePagination(data.pagination, page, limit),
     };
   };
 

@@ -18,7 +18,7 @@ test("Admin Payments combines owner metrics and preserves transaction DTOs", asy
         return {
           data: {
             transactions: [{ id: "tx-1", userId: "user-1", amount: 10 }],
-            pagination: { currentPage: 2 },
+            pagination: { totalCount: 1, currentPage: 2 },
           },
         };
       },
@@ -65,7 +65,39 @@ test("Admin Payments combines owner metrics and preserves transaction DTOs", asy
     name: "Alex Mentor",
     email: "alex@example.com",
   });
-  assert.deepEqual(transactions.pagination, { currentPage: 2 });
+  assert.deepEqual(transactions.pagination, {
+    totalCount: 1,
+    currentPage: 2,
+    totalPages: 1,
+    hasMore: false,
+  });
+});
+
+test("Admin Payments returns a complete empty pagination contract", async () => {
+  const service = createAdminPaymentsService({
+    paymentsClient: {
+      getAdminPaymentSummary: async () => ({ data: {} }),
+      getAdminPaymentTransactions: async () => ({ data: {} }),
+    },
+    workspaceClient: {
+      getPaymentStats: async () => ({ data: {} }),
+      getPaymentChart: async () => ({ data: [] }),
+    },
+    identityClient: {
+      listUsers: async () => ({ data: { users: [] } }),
+      getUser: async () => ({ data: {} }),
+    },
+  });
+
+  assert.deepEqual(await service.getTransactions(), {
+    transactions: [],
+    pagination: {
+      totalCount: 0,
+      currentPage: 1,
+      totalPages: 0,
+      hasMore: false,
+    },
+  });
 });
 
 test("Admin Payments browser routes are mounted behind administrator authentication", async () => {

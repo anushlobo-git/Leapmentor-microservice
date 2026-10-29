@@ -3,12 +3,64 @@ const AppError = require("../utils/AppError");
 const IMAGE_FOLDER = "leapmentor/profiles";
 const RESUME_FOLDER = "leapmentor/verification-docs/resumes";
 const WORK_EXPERIENCE_FOLDER = "leapmentor/verification-docs/work-experience";
+const MAX_UPLOAD_ATTEMPTS = 3;
+const RETRYABLE_NETWORK_ERRORS = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ECONNABORTED",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+  "EPIPE",
+]);
 
 const extractErrorMessage = (error) => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object") return JSON.stringify(error);
+  if (error?.message) return error.message;
+  if (error?.error?.message) return error.error.message;
+  if (error instanceof Error) return error.message || error.name;
+  if (typeof error === "object") {
+    try {
+      return JSON.stringify(error);
+    } catch (_serializationError) {
+      return "Unserializable Cloudinary error";
+    }
+  }
   return String(error);
 };
+
+const describeProviderError = (error) => {
+  const description = {
+    name: error?.name,
+    message: extractErrorMessage(error),
+    code: error?.http_code || error?.code,
+  };
+
+  if (Array.isArray(error?.errors)) {
+    description.causes = error.errors.map((cause) => ({
+      name: cause?.name,
+      message: cause?.message,
+      code: cause?.code,
+      address: cause?.address,
+      port: cause?.port,
+    }));
+  }
+
+  if (error?.cause) {
+    description.cause = {
+      name: error.cause.name,
+      message: error.cause.message,
+      code: error.cause.code,
+    };
+  }
+
+  return description;
+};
+
+const isRetryableUploadError = (error) =>
+  error?.name === "AggregateError" ||
+  RETRYABLE_NETWORK_ERRORS.has(error?.code) ||
+  (Array.isArray(error?.errors) &&
+    error.errors.some((cause) => RETRYABLE_NETWORK_ERRORS.has(cause?.code)));
 
 const createUploadService = ({
   cloudinary,
@@ -20,17 +72,44 @@ const createUploadService = ({
   toMentorProfileDTO,
   logger = console,
 }) => {
-  const uploadBuffer = (buffer, options) =>
-    new Promise((resolve, reject) => {
+  const uploadBufferOnce = (buffer, options, mimeType) => {
+    if (typeof cloudinary.uploader.upload === "function") {
+      const dataUri = `data:${mimeType || "application/octet-stream"};base64,${buffer.toString("base64")}`;
+      return cloudinary.uploader.upload(dataUri, options);
+    }
+
+    return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         options,
         (error, result) => {
-          if (error) return reject(new Error(extractErrorMessage(error)));
+          if (error) return reject(error);
           return resolve(result);
         },
       );
       streamifier.createReadStream(buffer).pipe(stream);
     });
+  };
+
+  const uploadBuffer = async (buffer, options, mimeType) => {
+    for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
+      try {
+        return await uploadBufferOnce(buffer, options, mimeType);
+      } catch (error) {
+        const canRetry =
+          attempt < MAX_UPLOAD_ATTEMPTS && isRetryableUploadError(error);
+        if (!canRetry) throw error;
+
+        logger.warn?.("Transient Cloudinary upload failure; retrying", {
+          attempt,
+          nextAttempt: attempt + 1,
+          error: describeProviderError(error),
+        });
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      }
+    }
+
+    throw new Error("Cloudinary upload attempts exhausted");
+  };
 
   const ensureProvider = () => {
     if (!cloudinaryConfigured) {
@@ -56,12 +135,13 @@ const createUploadService = ({
         resource_type: "image",
         use_filename: false,
         unique_filename: true,
+        timeout: 120000,
         display_name: imageName || filePayload.originalname,
         transformation: [
           { width: 400, height: 400, crop: "fill", gravity: "face" },
           { quality: "auto", fetch_format: "auto" },
         ],
-      });
+      }, filePayload.mimetype);
       return {
         url: result.secure_url,
         publicId: result.public_id,
@@ -69,7 +149,7 @@ const createUploadService = ({
       };
     } catch (error) {
       logger.error?.("Cloudinary profile picture upload failed", {
-        error: error.message,
+        error: describeProviderError(error),
       });
       throw new AppError(
         "Failed to upload profile picture",
@@ -101,7 +181,7 @@ const createUploadService = ({
         unique_filename: true,
         display_name: resumeFile.originalname,
         use_filename: false,
-      });
+      }, resumeFile.mimetype);
       uploadedPublicIds.push(resumeResult.public_id);
 
       const workResults = await Promise.all(
@@ -112,7 +192,7 @@ const createUploadService = ({
             unique_filename: true,
             display_name: file.originalname,
             use_filename: false,
-          }),
+          }, file.mimetype),
         ),
       );
       workResults.forEach((result) => uploadedPublicIds.push(result.public_id));
@@ -164,7 +244,7 @@ const createUploadService = ({
     } catch (error) {
       logger.error?.("Verification upload failed, initiating rollback", {
         userId: currentUser._id,
-        error: error.message,
+        error: describeProviderError(error),
       });
       await Promise.all(
         uploadedPublicIds.map((publicId) =>

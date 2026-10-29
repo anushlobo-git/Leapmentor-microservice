@@ -104,3 +104,10 @@ test("rejects a signed Admin token with a stale tokenVersion", async () => {
   assert.equal(forwardedError.statusCode, 401);
   assert.equal(forwardedError.code, "SESSION_REVOKED");
 });
+
+test("production admin container exposes internal session validation dependencies", () => {
+  const container = require("../container");
+
+  assert.equal(typeof container.internalServiceAuth, "function");
+  assert.equal(typeof container.internalAdminAuthRouter, "function");
+});
