@@ -9,6 +9,57 @@ const createInternalAdminReportsController = ({
   identityClient,
 }) => {
   const validId = (value) => mongoose.Types.ObjectId.isValid(value);
+  const idOf = (value) => value?._id?.toString?.() || value?.toString?.() || value;
+
+  const decorateReports = async (reports, connectRequests, correlationId) => {
+    const requestsById = new Map(
+      connectRequests.filter(Boolean).map((request) => [idOf(request._id), request]),
+    );
+    const ids = reports.flatMap((report) => {
+      const request = requestsById.get(idOf(report.connectRequest));
+      return [
+        idOf(report.reportedBy),
+        idOf(report.reportedUser),
+        idOf(request?.mentee),
+        idOf(request?.mentor),
+      ].filter(Boolean);
+    });
+    const users = identityClient?.getUserSummaries
+      ? await identityClient.getUserSummaries(ids, correlationId)
+      : [];
+    const usersById = new Map((users || []).map((user) => [idOf(user._id), user]));
+
+    return reports.map((report) => {
+      const request = requestsById.get(idOf(report.connectRequest));
+      const reportedBy = usersById.get(idOf(report.reportedBy)) || report.reportedBy;
+      const reportedUser = usersById.get(idOf(report.reportedUser)) || report.reportedUser;
+      const menteeUser = usersById.get(idOf(request?.mentee));
+      const mentorUser = usersById.get(idOf(request?.mentor));
+      const mentee = report.reporterRole === "mentee" ? reportedBy : reportedUser;
+      const mentor = report.reporterRole === "mentor" ? reportedBy : reportedUser;
+
+      return {
+        ...report,
+        _id: idOf(report._id),
+        id: idOf(report._id),
+        mentee: menteeUser?.name || mentee?.name || idOf(mentee) || "—",
+        menteeEmail: menteeUser?.email || mentee?.email || "",
+        mentor: mentorUser?.name || mentor?.name || idOf(mentor) || "—",
+        mentorEmail: mentorUser?.email || mentor?.email || "",
+        reportedBy: reportedBy?.name || idOf(reportedBy) || "—",
+        reportedById: idOf(reportedBy),
+        reportedUser: reportedUser?.name || idOf(reportedUser) || "—",
+        category: report.complaintType || "",
+        connectRequestId: idOf(report.connectRequest),
+        sessionStatus: request?.status || null,
+        paymentStatus: request?.paymentStatus || null,
+        totalAmount: request?.totalAmount || 0,
+        date: report.createdAt
+          ? new Date(report.createdAt).toISOString().split("T")[0]
+          : "—",
+      };
+    });
+  };
 
   const getStats = async (_req, res, next) => {
     try {
@@ -50,10 +101,17 @@ const createInternalAdminReportsController = ({
           limit,
         }),
       ]);
+      const connectRequests = await Promise.all(
+        reports.map((report) =>
+          report.connectRequest
+            ? connectRequestRepository.findById(report.connectRequest)
+            : null,
+        ),
+      );
       return res.status(200).json({
         success: true,
         data: {
-          reports,
+          reports: await decorateReports(reports, connectRequests, req.correlationId),
           pagination: {
             total,
             page,
@@ -82,11 +140,16 @@ const createInternalAdminReportsController = ({
       const connectRequest = report.connectRequest
         ? await connectRequestRepository.findById(report.connectRequest)
         : null;
+      const [decoratedReport] = await decorateReports(
+        [report],
+        [connectRequest],
+        req.correlationId,
+      );
       return res
         .status(200)
         .json({
           success: true,
-          data: { report, connectRequest },
+          data: { report: decoratedReport, connectRequest },
           message: "Report retrieved",
         });
     } catch (error) {

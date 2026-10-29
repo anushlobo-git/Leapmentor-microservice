@@ -31,7 +31,11 @@ const createAdminPaymentsController = ({ paymentsService }) => ({
         req.query,
         req.correlationId,
       );
-      return res.status(200).json({ success: true, ...result });
+      return res.status(200).json({
+        success: true,
+        data: result,
+        message: "Transactions retrieved",
+      });
     } catch (error) {
       return next(error);
     }

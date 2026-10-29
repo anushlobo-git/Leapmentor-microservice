@@ -5,6 +5,42 @@ const assert = require("node:assert/strict");
 const createApp = require("../app");
 const createAdminPaymentsService = require("../services/payments.service");
 const createAdminPaymentsRouter = require("../routes/payments.routes");
+const createAdminPaymentsController = require("../controllers/payments.controller");
+
+test("Admin Payments transactions use the standard API envelope", async () => {
+  const response = {
+    statusCode: null,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+  const controller = createAdminPaymentsController({
+    paymentsService: {
+      getTransactions: async () => ({
+        transactions: [{ id: "tx-1" }],
+        pagination: { totalCount: 1 },
+      }),
+    },
+  });
+
+  await controller.getTransactions({ query: {}, correlationId: "corr-1" }, response, () => {});
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    success: true,
+    data: {
+      transactions: [{ id: "tx-1" }],
+      pagination: { totalCount: 1 },
+    },
+    message: "Transactions retrieved",
+  });
+});
 
 test("Admin Payments combines owner metrics and preserves transaction DTOs", async () => {
   const paymentQueries = [];
