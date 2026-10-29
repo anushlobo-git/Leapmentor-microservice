@@ -3,6 +3,7 @@ const SEARCH_PROJECTION = [
   "currentRole",
   "industry",
   "company",
+  "education",
   "bio",
   "profilePicture",
   "yearsOfExperience",

@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const createMentorProfileRepository = require("../../repositories/mentorProfile.repository");
+const MentorProfile = require("../../models/MentorProfile");
 
 const chain = (value) => {
   const query = Promise.resolve(value);
@@ -13,7 +14,7 @@ const chain = (value) => {
   return query;
 };
 
-test("uses user ownership for current and published mentor profile reads", async () => {
+test("reads mentor profiles without populating cross-service User references", async () => {
   const currentQuery = chain({ _id: "profile-1" });
   const publicQuery = chain({ _id: "profile-1", isProfilePublished: true });
   const calls = [];
@@ -25,18 +26,15 @@ test("uses user ownership for current and published mentor profile reads", async
   };
   const repository = createMentorProfileRepository(MentorProfile);
 
-  await repository.findMentorProfileByUserIdWithUser("user-1");
+  await repository.findMentorProfileByUserId("user-1");
   await repository.findPublishedByUserId("user-1");
 
   assert.deepEqual(calls, [
     { user: "user-1" },
     { user: "user-1", isProfilePublished: { $ne: false } },
   ]);
-  assert.deepEqual(currentQuery.population, [
-    "user",
-    "name email isEmailVerified",
-  ]);
-  assert.deepEqual(publicQuery.population, ["user", "name email"]);
+  assert.equal(currentQuery.population, undefined);
+  assert.equal(publicQuery.population, undefined);
 });
 
 test("creates and atomically updates mentor profiles with validators enabled", async () => {
@@ -65,4 +63,10 @@ test("creates and atomically updates mentor profiles with validators enabled", a
     { $set: { bio: "Updated" } },
     { new: true, runValidators: true },
   ]);
+});
+
+test("persists education on mentor profiles", () => {
+  assert.equal(MentorProfile.schema.path("education").instance, "String");
+  assert.equal(MentorProfile.schema.path("education").options.maxlength, 500);
+  assert.equal(MentorProfile.schema.path("education").defaultValue, "");
 });

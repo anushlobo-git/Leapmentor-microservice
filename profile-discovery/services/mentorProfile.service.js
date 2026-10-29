@@ -7,6 +7,7 @@ const UPDATE_FIELDS = [
   "currentRole",
   "industry",
   "company",
+  "education",
   "bio",
   "profilePicture",
   "yearsOfExperience",
@@ -48,6 +49,7 @@ const createMentorProfileService = ({
       currentRole: data.currentRole,
       industry: data.industry,
       company: data.company,
+      education: data.education || "",
       bio: data.bio,
       profilePicture: data.profilePicture || "",
       profilePictureFileName: data.profilePictureFileName || "",
@@ -69,10 +71,10 @@ const createMentorProfileService = ({
     userId,
     { correlationId, user: userSummary } = {},
   ) => {
-    await verifyMentorRole(userId, correlationId, userSummary);
-    const profile = await mentorProfileRepository.findMentorProfileByUserIdWithUser(userId);
+    const user = await verifyMentorRole(userId, correlationId, userSummary);
+    const profile = await mentorProfileRepository.findMentorProfileByUserId(userId);
     if (!profile) throw new AppError("Profile not found", 404, "PROFILE_NOT_FOUND");
-    return toMentorProfileDTO(profile);
+    return toMentorProfileDTO(profile, user);
   };
 
   const updateMyProfile = async (
@@ -94,12 +96,13 @@ const createMentorProfileService = ({
     return toMentorProfileDTO(profile);
   };
 
-  const getPublicProfile = async (targetUserId) => {
+  const getPublicProfile = async (targetUserId, { correlationId } = {}) => {
     const profile = await mentorProfileRepository.findPublishedByUserId(targetUserId);
     if (!profile) {
       throw new AppError("Mentor profile not found", 404, "PROFILE_NOT_FOUND");
     }
-    return toMentorProfileDTO(profile);
+    const user = await identityClient.getUserSummary(targetUserId, correlationId);
+    return toMentorProfileDTO(profile, user);
   };
 
   return { createProfile, getMyProfile, updateMyProfile, getPublicProfile };

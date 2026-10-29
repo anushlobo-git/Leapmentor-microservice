@@ -10,7 +10,7 @@ const createFakes = () => {
   const repository = {
     findByUserId: async (userId) =>
       profiles.find((profile) => profile.user === userId) || null,
-    findByUserIdWithAccountInfo: async (userId) =>
+    findByUserId: async (userId) =>
       profiles.find((profile) => profile.user === userId) || null,
     findPublishedByUserId: async (userId) =>
       profiles.find(
@@ -36,7 +36,11 @@ const createFakes = () => {
     identityClient: {
       getUserSummary: async (userId) => identityUsers.get(userId) || null,
     },
-    toMenteeProfileDTO: (profile) => ({ dto: true, ...profile }),
+    toMenteeProfileDTO: (profile, userSummary) => ({
+      dto: true,
+      ...profile,
+      ...(userSummary ? { userSummary } : {}),
+    }),
   };
 };
 
@@ -84,7 +88,12 @@ test("rejects mentee profile writes for accounts without the mentee role", async
 
 test("reads, updates, and publicly reads published mentee profiles", async () => {
   const fakes = createFakes();
-  fakes.identityUsers.set("user-3", { _id: "user-3", roles: ["mentee"] });
+  fakes.identityUsers.set("user-3", {
+    _id: "user-3",
+    name: "Taylor Mentee",
+    email: "mentee@example.com",
+    roles: ["mentee"],
+  });
   fakes.profiles.push({
     _id: "profile-3",
     user: "user-3",
@@ -103,10 +112,12 @@ test("reads, updates, and publicly reads published mentee profiles", async () =>
   const publicProfile = await service.getPublicProfile("user-3");
 
   assert.equal(current.bio, "Old bio");
+  assert.equal(current.userSummary.name, "Taylor Mentee");
   assert.equal(updated.bio, "New bio");
   assert.equal(updated.emailNotifications, false);
   assert.equal(updated.marketingPreferences, true);
   assert.equal(publicProfile.bio, "New bio");
+  assert.equal(publicProfile.userSummary.email, "mentee@example.com");
 });
 
 test("does not allow mentee updates to change ownership or publication state", async () => {

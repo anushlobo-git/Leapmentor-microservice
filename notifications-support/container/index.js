@@ -40,6 +40,7 @@ const createAdminAuthClient = require("../clients/adminAuthClient");
 
 const health = { isReady: () => db.isConnected() };
 const notificationRepository = createNotificationRepository(Notification);
+const notificationRedisClient = createClient({ url: env.redisUrl });
 const notificationEventRedisClient = createClient({ url: env.redisUrl });
 const notificationEventPublisher = {
   publish: async (event) => {
@@ -95,7 +96,6 @@ const internalNotificationRouter = createInternalNotificationRouter({
   controller: internalNotificationController,
   validation: internalNotificationValidation,
 });
-const notificationRedisClient = createClient({ url: env.redisUrl });
 const notificationConsumer = createNotificationConsumer({
   client: notificationRedisClient,
   streamName: env.notificationStreamName,

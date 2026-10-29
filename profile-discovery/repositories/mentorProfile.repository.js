@@ -2,12 +2,6 @@ const createMentorProfileRepository = (MentorProfile) => {
   const findMentorProfileByUserId = (userId) =>
     MentorProfile.findOne({ user: userId }).lean();
 
-  const findMentorProfileByUserIdWithUser = (userId) =>
-    MentorProfile.findOne({ user: userId }).populate(
-      "user",
-      "name email isEmailVerified",
-    );
-
   const findAllMentorProfilesForAdmin = () =>
     MentorProfile.find({})
       .sort({ createdAt: -1 })
@@ -23,7 +17,7 @@ const createMentorProfileRepository = (MentorProfile) => {
     MentorProfile.findOne({
       user: userId,
       isProfilePublished: { $ne: false },
-    }).populate("user", "name email");
+    });
 
   const create = (profileData) => MentorProfile.create(profileData);
 
@@ -57,7 +51,6 @@ const createMentorProfileRepository = (MentorProfile) => {
 
   return {
     findMentorProfileByUserId,
-    findMentorProfileByUserIdWithUser,
     findAllMentorProfilesForAdmin,
     findMentorProfileByIdForAdmin,
     findMentorProfileByIdForAdminMutable,

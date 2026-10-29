@@ -10,6 +10,7 @@ test("accepts a valid mentor create payload", () => {
       body: {
         currentRole: "Engineer",
         industry: "Technology",
+        education: "B.Tech in Computer Science",
         bio: "Builds systems.",
         skills: ["Node.js"],
         languages: ["English"],
@@ -22,6 +23,49 @@ test("accepts a valid mentor create payload", () => {
     },
   );
   assert.equal(called, true);
+});
+
+test("accepts education in mentor profile create and update payloads", () => {
+  const body = {
+    currentRole: "Senior Developer Engineer",
+    industry: "Technology",
+    education: "B.Tech in Computer Science, VIT Vellore",
+    bio: "Experienced developer.",
+    skills: ["JavaScript"],
+  };
+  let createError;
+  let updateError;
+
+  validations.createProfileValidation(
+    { body },
+    {},
+    (error) => {
+      createError = error;
+    },
+  );
+  validations.updateProfileValidation(
+    { body: { education: body.education } },
+    {},
+    (error) => {
+      updateError = error;
+    },
+  );
+
+  assert.equal(createError, undefined);
+  assert.equal(updateError, undefined);
+});
+
+test("rejects non-string mentor education values", () => {
+  let error;
+  validations.updateProfileValidation(
+    { body: { education: ["B.Tech"] } },
+    {},
+    (nextError) => {
+      error = nextError;
+    },
+  );
+  assert.equal(error.code, "INVALID_PROFILE");
+  assert.equal(error.message, "education must be a string.");
 });
 
 test("rejects invalid URL and out-of-range profile values", () => {

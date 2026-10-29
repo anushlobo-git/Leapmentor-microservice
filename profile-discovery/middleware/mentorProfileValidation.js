@@ -10,6 +10,7 @@ const CREATE_FIELDS = new Set([
   "currentRole",
   "industry",
   "company",
+  "education",
   "bio",
   "profilePicture",
   "profilePictureFileName",
@@ -25,6 +26,7 @@ const UPDATE_FIELDS = new Set([
   "currentRole",
   "industry",
   "company",
+  "education",
   "bio",
   "profilePicture",
   "yearsOfExperience",
@@ -85,6 +87,9 @@ const validateCommon = (body, { create }) => {
   }
   if (body?.company !== undefined && typeof body.company !== "string") {
     throw invalid("company must be a string.");
+  }
+  if (body?.education !== undefined && typeof body.education !== "string") {
+    throw invalid("education must be a string.");
   }
   if (body?.skills !== undefined && (!Array.isArray(body.skills) || body.skills.length === 0)) {
     throw invalid("skills must be a non-empty array.", "INVALID_PROFILE_SKILLS");

@@ -10,8 +10,6 @@ const createFakes = () => {
   const repository = {
     findMentorProfileByUserId: async (userId) =>
       profiles.find((profile) => profile.user === userId) || null,
-    findMentorProfileByUserIdWithUser: async (userId) =>
-      profiles.find((profile) => profile.user === userId) || null,
     findPublishedByUserId: async (userId) =>
       profiles.find(
         (profile) => profile.user === userId && profile.isProfilePublished !== false,
@@ -36,7 +34,11 @@ const createFakes = () => {
     identityClient: {
       getUserSummary: async (userId) => identityUsers.get(userId) || null,
     },
-    toMentorProfileDTO: (profile) => ({ dto: true, ...profile }),
+    toMentorProfileDTO: (profile, userSummary) => ({
+      dto: true,
+      ...profile,
+      ...(userSummary ? { userSummary } : {}),
+    }),
   };
 };
 
@@ -50,6 +52,7 @@ test("creates a mentor profile with defaults after confirming the mentor role", 
     {
       currentRole: "Engineer",
       industry: "Technology",
+      education: "B.Tech in Computer Science",
       bio: "Builds reliable systems.",
       skills: ["Node.js"],
     },
@@ -58,6 +61,7 @@ test("creates a mentor profile with defaults after confirming the mentor role", 
 
   assert.equal(result.dto, true);
   assert.equal(result.user, "user-1");
+  assert.equal(result.education, "B.Tech in Computer Science");
   assert.equal(result.languages[0], "English");
   assert.equal(result.isProfileComplete, true);
   assert.equal(result.isProfilePublished, true);
@@ -95,22 +99,34 @@ test("prevents a second profile for the same mentor account", async () => {
 
 test("reads, updates, and publicly reads mentor profiles through the repository boundary", async () => {
   const fakes = createFakes();
-  fakes.identityUsers.set("user-4", { _id: "user-4", roles: ["mentor"] });
+  fakes.identityUsers.set("user-4", {
+    _id: "user-4",
+    name: "Morgan Mentor",
+    email: "mentor@example.com",
+    roles: ["mentor"],
+  });
   fakes.profiles.push({
     _id: "profile-4",
     user: "user-4",
     bio: "Old bio",
+    education: "B.Tech",
     isProfilePublished: true,
   });
   const service = createMentorProfileService(fakes);
 
   const current = await service.getMyProfile("user-4");
-  const updated = await service.updateMyProfile("user-4", { bio: "New bio" });
+  const updated = await service.updateMyProfile("user-4", {
+    bio: "New bio",
+    education: "M.Tech",
+  });
   const publicProfile = await service.getPublicProfile("user-4");
 
   assert.equal(current.bio, "Old bio");
+  assert.equal(current.userSummary.name, "Morgan Mentor");
   assert.equal(updated.bio, "New bio");
+  assert.equal(updated.education, "M.Tech");
   assert.equal(publicProfile.bio, "New bio");
+  assert.equal(publicProfile.userSummary.email, "mentor@example.com");
 });
 
 test("does not allow profile updates to change ownership or moderation fields", async () => {

@@ -13,20 +13,24 @@ const chain = (value) => {
   return query;
 };
 
-test("uses exact publication ownership for mentee public profiles", async () => {
+test("reads mentee profiles without populating cross-service User references", async () => {
   const query = chain({ _id: "profile-1" });
-  let filter;
+  const filters = [];
   const repository = createMenteeProfileRepository({
     findOne: (value) => {
-      filter = value;
+      filters.push(value);
       return query;
     },
   });
 
+  await repository.findByUserId("user-1");
   await repository.findPublishedByUserId("user-1");
 
-  assert.deepEqual(filter, { user: "user-1", isProfilePublished: true });
-  assert.deepEqual(query.population, ["user", "name email"]);
+  assert.deepEqual(filters, [
+    { user: "user-1" },
+    { user: "user-1", isProfilePublished: true },
+  ]);
+  assert.equal(query.population, undefined);
 });
 
 test("creates and updates mentee profiles with validators enabled", async () => {

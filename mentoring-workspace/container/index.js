@@ -187,6 +187,12 @@ const notificationRealtimeConsumer = createNotificationRealtimeConsumer({
   realtimePublisher,
   enabled: env.redisEnabled,
 });
+const identityHttpClient = createInternalHttpClient({
+  baseUrl: env.identityServiceUrl,
+  serviceToken: env.identityServiceToken,
+  timeoutMs: env.internalRequestTimeoutMs,
+});
+const identityClient = createIdentityClient({ httpClient: identityHttpClient });
 const connectRequestService = createConnectRequestService({
   connectRequestRepository,
   notificationClient,
@@ -271,12 +277,6 @@ const privateNoteRouter = createPrivateNoteRouter({
   authenticate,
   validations: privateNoteValidations,
 });
-const identityHttpClient = createInternalHttpClient({
-  baseUrl: env.identityServiceUrl,
-  serviceToken: env.identityServiceToken,
-  timeoutMs: env.internalRequestTimeoutMs,
-});
-const identityClient = createIdentityClient({ httpClient: identityHttpClient });
 const internalAdminReportsController = createInternalAdminReportsController({
   reportRepository,
   connectRequestRepository,

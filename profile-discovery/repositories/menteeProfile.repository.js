@@ -1,17 +1,8 @@
 const createMenteeProfileRepository = (MenteeProfile) => {
   const findByUserId = (userId) => MenteeProfile.findOne({ user: userId });
 
-  const findByUserIdWithAccountInfo = (userId) =>
-    MenteeProfile.findOne({ user: userId }).populate(
-      "user",
-      "name email isEmailVerified",
-    );
-
   const findPublishedByUserId = (userId) =>
-    MenteeProfile.findOne({ user: userId, isProfilePublished: true }).populate(
-      "user",
-      "name email",
-    );
+    MenteeProfile.findOne({ user: userId, isProfilePublished: true });
 
   const create = (profileData) => MenteeProfile.create(profileData);
 
@@ -24,7 +15,6 @@ const createMenteeProfileRepository = (MenteeProfile) => {
 
   return {
     findByUserId,
-    findByUserIdWithAccountInfo,
     findPublishedByUserId,
     create,
     findOneAndUpdateByUserId,

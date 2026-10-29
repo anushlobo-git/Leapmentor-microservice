@@ -8,6 +8,7 @@ const toMentorSearchDTO = (profile, user) => ({
   currentRole: profile.currentRole || "",
   industry: profile.industry || "",
   company: profile.company || "",
+  education: profile.education || "",
   bio: profile.bio || "",
   profilePicture: profile.profilePicture || "",
   yearsOfExperience: profile.yearsOfExperience ?? 0,

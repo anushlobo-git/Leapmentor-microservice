@@ -38,6 +38,7 @@ const mentorProfileSchema = new mongoose.Schema(
     currentRole: { type: String, trim: true, maxlength: 150, default: "" },
     industry: { type: String, trim: true, maxlength: 150, default: "" },
     company: { type: String, trim: true, maxlength: 150, default: "" },
+    education: { type: String, trim: true, maxlength: 500, default: "" },
     bio: { type: String, trim: true, maxlength: 1000, default: "" },
     profilePicture: { type: String, trim: true, maxlength: 2048, default: "" },
     profilePictureFileName: {

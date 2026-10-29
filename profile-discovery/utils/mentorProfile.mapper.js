@@ -1,18 +1,29 @@
-const toMentorProfileDTO = (profile) => {
+const toMentorProfileDTO = (profile, userSummary) => {
   if (!profile) return null;
+
+  const populatedUser =
+    profile.user &&
+    typeof profile.user === "object" &&
+    (profile.user.name || profile.user.email)
+      ? profile.user
+      : null;
+  const account = userSummary || populatedUser;
+  const userId = populatedUser?._id || profile.user;
+  const accountId = account?._id || account?.id || userId;
 
   return {
     _id: profile._id?.toString?.() || profile._id,
-    user: profile.user?._id
+    user: account
       ? {
-          _id: profile.user._id.toString(),
-          name: profile.user.name,
-          email: profile.user.email,
+          _id: accountId?.toString?.() || accountId,
+          name: account.name,
+          email: account.email,
         }
-      : profile.user?.toString?.() || profile.user,
+      : userId?.toString?.() || userId,
     currentRole: profile.currentRole || "",
     industry: profile.industry || "",
     company: profile.company || "",
+    education: profile.education || "",
     bio: profile.bio || "",
     profilePicture: profile.profilePicture || "",
     profilePictureFileName: profile.profilePictureFileName || "",

@@ -51,7 +51,9 @@ const createMenteeProfileController = ({ menteeProfileService }) => {
 
   const getPublicProfile = async (req, res, next) => {
     try {
-      const profile = await menteeProfileService.getPublicProfile(req.params.id);
+      const profile = await menteeProfileService.getPublicProfile(req.params.id, {
+        correlationId: req.correlationId,
+      });
       return res.status(200).json({
         success: true,
         data: profile,

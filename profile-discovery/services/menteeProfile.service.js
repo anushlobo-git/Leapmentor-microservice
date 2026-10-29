@@ -73,12 +73,12 @@ const createMenteeProfileService = ({
     userId,
     { correlationId, user: userSummary } = {},
   ) => {
-    await verifyMenteeRole(userId, correlationId, userSummary);
-    const profile = await menteeProfileRepository.findByUserIdWithAccountInfo(userId);
+    const user = await verifyMenteeRole(userId, correlationId, userSummary);
+    const profile = await menteeProfileRepository.findByUserId(userId);
     if (!profile) {
       throw new AppError("Profile not found", 404, "PROFILE_NOT_FOUND");
     }
-    return toMenteeProfileDTO(profile);
+    return toMenteeProfileDTO(profile, user);
   };
 
   const updateMyProfile = async (
@@ -102,7 +102,7 @@ const createMenteeProfileService = ({
     return toMenteeProfileDTO(profile);
   };
 
-  const getPublicProfile = async (targetUserId) => {
+  const getPublicProfile = async (targetUserId, { correlationId } = {}) => {
     const profile = await menteeProfileRepository.findPublishedByUserId(targetUserId);
     if (!profile) {
       throw new AppError(
@@ -111,7 +111,8 @@ const createMenteeProfileService = ({
         "PROFILE_NOT_FOUND",
       );
     }
-    return toMenteeProfileDTO(profile);
+    const user = await identityClient.getUserSummary(targetUserId, correlationId);
+    return toMenteeProfileDTO(profile, user);
   };
 
   return { createProfile, getMyProfile, updateMyProfile, getPublicProfile };
