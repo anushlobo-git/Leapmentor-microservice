@@ -10,8 +10,6 @@ const createFakes = () => {
   const repository = {
     findByUserId: async (userId) =>
       profiles.find((profile) => profile.user === userId) || null,
-    findByUserId: async (userId) =>
-      profiles.find((profile) => profile.user === userId) || null,
     findPublishedByUserId: async (userId) =>
       profiles.find(
         (profile) => profile.user === userId && profile.isProfilePublished === true,

@@ -8,6 +8,9 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test",
+    "lint": "eslint . --config ../.eslintrc.cjs",
+    "format": "prettier --write . --ignore-path ../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../.prettierignore",
     "cleanup:availability": "node cron/cleanupAvailability.js",
     "migrate:profile-published": "node scripts/backfillMentorProfilePublished.js",
     "migrate:verified-mentors": "node scripts/migrateExistingMentorsToVerified.js"
@@ -26,5 +29,9 @@
     "multer": "^2.5.0",
     "node-cron": "^4.1.1",
     "streamifier": "^0.1.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "prettier": "^3.6.2"
   }
 }
