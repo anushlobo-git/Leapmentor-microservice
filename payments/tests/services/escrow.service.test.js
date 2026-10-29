@@ -15,7 +15,9 @@ const createFakes = () => {
     ],
   ]);
   const transactions = [];
+  const releaseRecords = new Map();
   const invoiceEmails = [];
+  const emailEvents = [];
   const context = {
     _id: "request-1",
     mentee: "mentee-1",
@@ -38,6 +40,7 @@ const createFakes = () => {
       totalAmount: 240,
     }),
     queueInvoiceEmail: async (event) => invoiceEmails.push(event),
+    queueEmailEvent: async (event) => emailEvents.push(event),
     updatePaymentState: async (_id, state) => {
       workspaceUpdates.push(state);
       Object.assign(context, state);
@@ -56,7 +59,17 @@ const createFakes = () => {
     save: async (wallet) => wallet,
   };
   const transactionRepository = {
+    findEscrowReleaseByKey: async (key) => releaseRecords.get(key) || null,
     createMany: async (items) => {
+      for (const item of items) {
+        if (!item.idempotencyKey) continue;
+        if (releaseRecords.has(item.idempotencyKey)) {
+          const error = new Error("duplicate key");
+          error.code = 11000;
+          throw error;
+        }
+        releaseRecords.set(item.idempotencyKey, item);
+      }
       transactions.push(...items);
       return items;
     },
@@ -75,8 +88,11 @@ const createFakes = () => {
     wallets,
     transactions,
     context,
+    workspaceClient,
     workspaceUpdates,
     invoiceEmails,
+    emailEvents,
+    releaseRecords,
   };
 };
 
@@ -108,6 +124,10 @@ test("holds mentee funds, records a ledger transaction, and updates Workspace st
     fakes.invoiceEmails[0].invoicePdfBase64,
     Buffer.from("%PDF-invoice").toString("base64"),
   );
+  assert.deepEqual(
+    fakes.emailEvents.map((event) => event.eventType),
+    ["payment.received.email", "payment.calendar-invite.email"],
+  );
 });
 
 test("invoice email failures do not roll back a successful escrow payment", async () => {
@@ -128,11 +148,20 @@ test("invoice email failures do not roll back a successful escrow payment", asyn
         Object.assign(fakes.context, state);
       },
       getInvoiceContext: async () => ({
-        mentee: { email: "mentee@example.com" },
+        mentee: { name: "Mentee", email: "mentee@example.com" },
+        mentor: { name: "Mentor", email: "mentor@example.com" },
+        selectedSlots: [
+          { date: "2099-01-01", startTime: "10:00", endTime: "11:00" },
+        ],
+        sessionRate: 100,
+        sessionCount: 2,
+        mentorPayout: 200,
+        commissionRate: 20,
       }),
       queueInvoiceEmail: async () => {
         throw new Error("Notifications unavailable");
       },
+      queueEmailEvent: async (event) => fakes.emailEvents.push(event),
     },
     runInTransaction: async (work) => work({}),
     getCommissionRate: async () => 20,
@@ -147,6 +176,10 @@ test("invoice email failures do not roll back a successful escrow payment", asyn
   });
   assert.equal(result.paymentStatus, "paid");
   assert.equal(fakes.transactions[0].type, "escrow_hold");
+  assert.deepEqual(
+    fakes.emailEvents.map((event) => event.eventType),
+    ["payment.received.email", "payment.calendar-invite.email"],
+  );
 });
 
 test("releases escrow to the mentor and marks the Workspace request completed", async () => {
@@ -168,6 +201,45 @@ test("releases escrow to the mentor and marks the Workspace request completed", 
   assert.equal(fakes.wallets.get("mentee-1:mentee").escrow, 0);
   assert.equal(fakes.wallets.get("mentor-1:mentor").balance, 200);
   assert.equal(fakes.workspaceUpdates.at(-1).status, "completed");
+});
+
+test("retries Workspace projection after escrow committed without paying twice", async () => {
+  const fakes = createFakes();
+  await fakes.service.pay({
+    connectRequestId: "request-1",
+    sessionRate: 100,
+    sessionCount: 2,
+    menteeId: "mentee-1",
+  });
+  const updatePaymentState = fakes.workspaceClient.updatePaymentState;
+  let shouldFail = true;
+  fakes.workspaceClient.updatePaymentState = async (...args) => {
+    if (shouldFail) {
+      shouldFail = false;
+      throw new Error("Workspace unavailable");
+    }
+    return updatePaymentState(...args);
+  };
+
+  await assert.rejects(
+    fakes.service.release({ requestId: "request-1", menteeId: "mentee-1" }),
+    /Workspace unavailable/,
+  );
+  assert.equal(fakes.wallets.get("mentor-1:mentor").balance, 200);
+
+  const retry = await fakes.service.release({
+    requestId: "request-1",
+    menteeId: "mentee-1",
+  });
+  assert.equal(retry.status, "completed");
+  assert.equal(fakes.wallets.get("mentor-1:mentor").balance, 200);
+  assert.equal(
+    fakes.transactions.filter(
+      (transaction) => transaction.type === "mentor_payout",
+    ).length,
+    1,
+  );
+  assert.equal(fakes.context.status, "completed");
 });
 
 test("refunds paid escrow for an authorized participant", async () => {

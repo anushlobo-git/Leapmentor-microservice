@@ -9,6 +9,16 @@ const createWorkspaceClient = ({ httpClient }) => ({
     });
     return response.data;
   },
+  queueEmailEvent: async (event, correlationId) => {
+    const response = await httpClient.request({
+      method: "POST",
+      path: "/internal/v1/finance/email-events",
+      body: event,
+      correlationId,
+      idempotencyKey: event.sourceEventId,
+    });
+    return response.data;
+  },
   getInvoiceContext: async (requestId, correlationId) => {
     const response = await httpClient.request({
       method: "GET",

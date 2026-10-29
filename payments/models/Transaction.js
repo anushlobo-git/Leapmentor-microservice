@@ -39,12 +39,21 @@ const transactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    idempotencyKey: {
+      type: String,
+      default: undefined,
+    },
+    releaseResult: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
   },
   { timestamps: true },
 );
 
 transactionSchema.index({ user: 1, createdAt: -1 });
 transactionSchema.index({ connectRequest: 1 });
+transactionSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model(
   "PaymentTransaction",

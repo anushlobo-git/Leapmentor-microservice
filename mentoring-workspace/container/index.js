@@ -191,6 +191,7 @@ const connectRequestService = createConnectRequestService({
   connectRequestRepository,
   notificationClient,
   profileClient,
+  identityClient,
   realtimePublisher,
 });
 const connectRequestController = createConnectRequestController({
@@ -220,6 +221,7 @@ const sessionService = createSessionService({
   notificationClient,
   profileClient,
   paymentsClient,
+  identityClient,
   realtimePublisher,
 });
 const sessionController = createSessionController({ sessionService });
@@ -332,6 +334,7 @@ const reportController = createReportController({ reportService });
 const reportRouter = createReportRouter({
   controller: reportController,
   authenticate,
+  identityClient,
   upload: reportUpload,
   validations: reportValidations,
 });

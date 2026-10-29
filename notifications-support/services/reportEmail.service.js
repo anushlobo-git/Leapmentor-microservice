@@ -1,109 +1,79 @@
+const { buildEmailMessages } = require("./emailTemplates");
+
 const createReportEmailService = ({ sendEmail, emailDeliveryRepository }) => {
-  const sendReportEvent = async (event) => {
-    if (!event?.sourceEventId || !event.reporterEmail) {
-      const error = new Error(
-        "Report email event is missing its event ID or recipient",
-      );
+  const sendEmailEvent = async (event) => {
+    if (!event?.sourceEventId) {
+      const error = new Error("Email event is missing its event ID");
       error.code = "INVALID_REPORT_EMAIL_EVENT";
       throw error;
     }
-    const supportedEventTypes = [
-      "report.submitted.email",
-      "report.resolved.email",
-      "payment.invoice.email",
-    ];
-    if (!supportedEventTypes.includes(event.eventType)) {
-      const error = new Error("Unsupported report email event");
-      error.code = "UNSUPPORTED_REPORT_EMAIL_EVENT";
+    const messages = buildEmailMessages(event);
+    if (!messages.length) {
+      const error = new Error("Unsupported or incomplete email event");
+      error.code = "UNSUPPORTED_EMAIL_EVENT";
       throw error;
     }
 
-    const previous = await emailDeliveryRepository.findBySourceEventId(
-      event.sourceEventId,
-    );
-    if (previous?.status === "sent") return { sent: true, deduplicated: true };
-    if (!previous) {
+    let deduplicated = true;
+    for (const [index, message] of messages.entries()) {
+      const deliveryId =
+        messages.length === 1
+          ? event.sourceEventId
+          : `${event.sourceEventId}:${index}`;
+      const previous =
+        await emailDeliveryRepository.findBySourceEventId(deliveryId);
+      if (previous?.status === "sent") continue;
+      deduplicated = false;
+      if (!previous) {
+        try {
+          await emailDeliveryRepository.createPending(deliveryId, event);
+        } catch (error) {
+          if (error?.code !== 11000) throw error;
+          const duplicate =
+            await emailDeliveryRepository.findBySourceEventId(deliveryId);
+          if (duplicate?.status === "sent") continue;
+        }
+      }
+
+      if (emailDeliveryRepository.claimForSending) {
+        const claimed =
+          await emailDeliveryRepository.claimForSending(deliveryId);
+        if (!claimed) continue;
+      }
+
       try {
-        await emailDeliveryRepository.createPending(event.sourceEventId);
+        await sendEmail(message);
+        await emailDeliveryRepository.markSent(deliveryId);
       } catch (error) {
-        if (error?.code !== 11000) throw error;
-        const duplicate = await emailDeliveryRepository.findBySourceEventId(
-          event.sourceEventId,
-        );
-        if (duplicate?.status === "sent")
-          return { sent: true, deduplicated: true };
+        await emailDeliveryRepository
+          .markFailed(deliveryId, error.message)
+          .catch(() => null);
+        throw error;
       }
     }
-
-    const isSubmitted = event.eventType === "report.submitted.email";
-    const isInvoice = event.eventType === "payment.invoice.email";
-    const message = isInvoice
-      ? {
-          to: event.reporterEmail,
-          subject: `Your LeapMentor invoice ${event.invoiceNumber}`,
-          text: [
-            `Hi ${event.reporterName || "there"},`,
-            "",
-            `Your payment for the session with ${event.mentorName || "your mentor"} was received.`,
-            `Sessions: ${event.sessionCount} x ${event.sessionRate} LP`,
-            `Total paid: ${event.totalAmount} LP`,
-            "Your invoice PDF is attached.",
-            "",
-            "LeapMentor",
-          ].join("\n"),
-          attachments: [
-            {
-              filename: `Invoice-${event.invoiceNumber}.pdf`,
-              content: Buffer.from(event.invoicePdfBase64 || "", "base64"),
-              contentType: "application/pdf",
-            },
-          ],
-        }
-      : isSubmitted
-        ? {
-            to: event.reporterEmail,
-            subject: "We received your LeapMentor report",
-            text: [
-              `Hi ${event.reporterName || "there"},`,
-              "",
-              "We received your report and our team will review it.",
-              `Report category: ${event.complaintType}`,
-              `Your description: ${event.description}`,
-              "",
-              "LeapMentor Support",
-            ].join("\n"),
-          }
-        : {
-            to: event.reporterEmail,
-            subject:
-              event.status === "resolved"
-                ? "Your LeapMentor report was resolved"
-                : "Your LeapMentor report was reviewed",
-            text: [
-              `Hi ${event.reporterName || "there"},`,
-              "",
-              `Our team reviewed your ${event.complaintType} report. Status: ${event.status}.`,
-              event.adminNote ? `Admin note: ${event.adminNote}` : "",
-              "",
-              "LeapMentor Support",
-            ]
-              .filter(Boolean)
-              .join("\n"),
-          };
-
-    try {
-      await sendEmail(message);
-      await emailDeliveryRepository.markSent(event.sourceEventId);
-      return { sent: true, deduplicated: false };
-    } catch (error) {
-      await emailDeliveryRepository
-        .markFailed(event.sourceEventId, error.message)
-        .catch(() => null);
-      throw error;
-    }
+    return { sent: true, deduplicated };
   };
 
-  return { sendReportEvent };
+  const drainPendingEmailEvents = async () => {
+    if (!emailDeliveryRepository.findPending) return { attempted: 0, sent: 0 };
+    const events = await emailDeliveryRepository.findPending(50);
+    let sent = 0;
+    for (const record of events) {
+      try {
+        const result = await sendEmailEvent(record.payload);
+        if (result.sent) sent += 1;
+      } catch {
+        // The delivery record retains the failure and is retried on the next drain.
+      }
+    }
+    return { attempted: events.length, sent };
+  };
+
+  return {
+    sendEmailEvent,
+    sendReportEvent: sendEmailEvent,
+    drainPendingEmailEvents,
+  };
 };
 
 module.exports = createReportEmailService;

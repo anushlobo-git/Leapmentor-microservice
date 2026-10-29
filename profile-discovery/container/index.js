@@ -148,6 +148,8 @@ const uploadService = createUploadService({
   cloudinaryConfigured,
   streamifier,
   mentorProfileRepository,
+  identityClient,
+  workspaceClient,
   toMentorProfileDTO,
 });
 const uploadController = createUploadController({ uploadService });
@@ -224,6 +226,7 @@ const internalAdminVerificationController =
   createInternalAdminVerificationController({
     mentorProfileRepository,
     identityClient,
+    workspaceClient,
     toMentorProfileDTO,
   });
 const internalAdminVerificationRouter = createInternalAdminVerificationRouter({

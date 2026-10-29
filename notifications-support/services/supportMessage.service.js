@@ -1,10 +1,20 @@
 const AppError = require("../utils/AppError");
 const { toSupportMessageDTO } = require("../utils/supportMessage.mapper");
 
-const createSupportMessageService = ({ supportMessageRepository, notificationService }) => {
+const createSupportMessageService = ({
+  supportMessageRepository,
+  notificationService,
+  reportEmailService,
+  logger = console,
+}) => {
   const submitTicket = async (inputData) => {
     const { email, subject, message, role, user } = inputData || {};
-    if (!email || !subject || !message) throw new AppError("All fields (email, subject, message) are required", 400, "INVALID_SUPPORT_TICKET");
+    if (!email || !subject || !message)
+      throw new AppError(
+        "All fields (email, subject, message) are required",
+        400,
+        "INVALID_SUPPORT_TICKET",
+      );
     const ticket = await supportMessageRepository.create({
       email: String(email).trim().toLowerCase(),
       subject: String(subject).trim(),
@@ -16,11 +26,22 @@ const createSupportMessageService = ({ supportMessageRepository, notificationSer
     return toSupportMessageDTO(ticket);
   };
 
-  const fetchAllTickets = async () => (await supportMessageRepository.findAllSortedByNewest()).map(toSupportMessageDTO);
+  const fetchAllTickets = async () =>
+    (await supportMessageRepository.findAllSortedByNewest()).map(
+      toSupportMessageDTO,
+    );
 
   const resolveTicket = async (ticketId) => {
-    const ticket = await supportMessageRepository.updateStatusById(ticketId, "resolved");
-    if (!ticket) throw new AppError("Support ticket not found", 404, "SUPPORT_TICKET_NOT_FOUND");
+    const ticket = await supportMessageRepository.updateStatusById(
+      ticketId,
+      "resolved",
+    );
+    if (!ticket)
+      throw new AppError(
+        "Support ticket not found",
+        404,
+        "SUPPORT_TICKET_NOT_FOUND",
+      );
     if (ticket.user && notificationService) {
       await notificationService.createFromEvent({
         sourceEventId: `support.ticket:${ticket._id}:resolved`,
@@ -30,6 +51,21 @@ const createSupportMessageService = ({ supportMessageRepository, notificationSer
         message: `Your support request "${ticket.subject}" has been resolved by our team.`,
         metadata: { ticketId: ticket._id },
       });
+    }
+    if (ticket.email && reportEmailService) {
+      try {
+        await reportEmailService.sendEmailEvent({
+          eventType: "support.resolved.email",
+          sourceEventId: `support.ticket:${ticket._id}:resolved:email`,
+          toEmail: ticket.email,
+          subject: ticket.subject,
+        });
+      } catch (error) {
+        logger.warn?.("Support resolution email could not be sent", {
+          ticketId: String(ticket._id),
+          error: error.message,
+        });
+      }
     }
     return toSupportMessageDTO(ticket);
   };

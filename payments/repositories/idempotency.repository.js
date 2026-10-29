@@ -1,7 +1,10 @@
 const createIdempotencyRepository = (IdempotencyKey) => {
   const findByKey = (key) => IdempotencyKey.findOne({ key }).lean();
 
-  const createPending = (data) => IdempotencyKey.create(data);
+  const createPending = (data, session) =>
+    session
+      ? IdempotencyKey.create([data], { session }).then(([record]) => record)
+      : IdempotencyKey.create(data);
 
   const markSucceeded = (key, responseBody, session) => {
     const query = IdempotencyKey.findOneAndUpdate(

@@ -23,6 +23,27 @@ const createWorkspaceAdminClient = ({ httpClient }) => ({
       path: "/internal/v1/admin/engagements/stats",
       correlationId,
     }),
+  getEngagements: (query = {}, correlationId) => {
+    const params = new URLSearchParams();
+    for (const key of [
+      "status",
+      "dateFrom",
+      "dateTo",
+      "page",
+      "limit",
+      "userIds",
+    ]) {
+      if (query[key] !== undefined && query[key] !== "") {
+        params.set(key, String(query[key]));
+      }
+    }
+    const suffix = params.toString() ? `?${params}` : "";
+    return httpClient.request({
+      method: "GET",
+      path: `/internal/v1/admin/engagements${suffix}`,
+      correlationId,
+    });
+  },
   getReportStats: (correlationId) =>
     httpClient.request({
       method: "GET",

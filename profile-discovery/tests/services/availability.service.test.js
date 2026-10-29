@@ -23,7 +23,11 @@ const createFakes = () => {
     updateAvailability: async (mentorId, updates) => {
       const record = records.find((candidate) => candidate.mentor === mentorId);
       if (!record) {
-        const created = { _id: "availability-upsert", mentor: mentorId, ...updates };
+        const created = {
+          _id: "availability-upsert",
+          mentor: mentorId,
+          ...updates,
+        };
         records.push(created);
         return created;
       }
@@ -40,8 +44,12 @@ const createFakes = () => {
     availabilityRepository: repository,
     workspaceClient: {
       getSlotBlockers: async () => ({
-        bookedSlots: [{ date: "2099-01-02", startTime: "09:00", endTime: "10:00" }],
-        lockedSlots: [{ date: "2099-01-02", startTime: "10:00", endTime: "11:00" }],
+        bookedSlots: [
+          { date: "2099-01-02", startTime: "09:00", endTime: "10:00" },
+        ],
+        lockedSlots: [
+          { date: "2099-01-02", startTime: "10:00", endTime: "11:00" },
+        ],
       }),
     },
     toAvailabilityDTO: (value) => ({ dto: true, ...value }),
@@ -82,7 +90,9 @@ test("creates, updates, and deletes a mentor availability record", async () => {
     specificDates: [],
   };
 
-  const created = await service.createAvailability("mentor-1", body, { user: mentor });
+  const created = await service.createAvailability("mentor-1", body, {
+    user: mentor,
+  });
   assert.equal(created.dto, true);
   await assert.rejects(
     () => service.createAvailability("mentor-1", body, { user: mentor }),
@@ -121,10 +131,12 @@ test("uses Workspace blockers when generating available slots", async () => {
     mentor: "mentor-1",
     timezone: "UTC",
     sessionDurations: [30, 60],
-    specificDates: [{
-      date: "2099-01-02",
-      slots: [{ startTime: "09:00", endTime: "12:00" }],
-    }],
+    specificDates: [
+      {
+        date: "2099-01-02",
+        slots: [{ startTime: "09:00", endTime: "12:00" }],
+      },
+    ],
     weeklyHours: [],
   });
   let blockerCall;
@@ -137,7 +149,12 @@ test("uses Workspace blockers when generating available slots", async () => {
     correlationId: "corr-slots",
   });
 
-  assert.deepEqual(blockerCall, ["mentor-1", "mentee-1", "corr-slots"]);
+  assert.deepEqual(blockerCall, [
+    "mentor-1",
+    "mentee-1",
+    "corr-slots",
+    undefined,
+  ]);
   assert.equal(result.slots[0].slots.length, 3);
 });
 
@@ -147,4 +164,46 @@ test("rejects unsupported slot durations", async () => {
     () => service.getAvailableSlots("mentor-1", 15, "mentee-1"),
     { statusCode: 400, code: "INVALID_DURATION" },
   );
+});
+
+test("reschedule availability returns empty slots without a record and scopes blockers to the request", async () => {
+  const fakes = createFakes();
+  let blockerArgs;
+  fakes.workspaceClient.getSlotBlockers = async (...args) => {
+    blockerArgs = args;
+    return { bookedSlots: [], lockedSlots: [] };
+  };
+  const service = createAvailabilityService(fakes);
+
+  const empty = await service.getAvailableSlots("mentor-1", 60, "mentee-1", {
+    correlationId: "corr-reschedule",
+    rescheduleRequestId: "request-1",
+  });
+  assert.deepEqual(empty, {
+    timezone: "Asia/Kolkata",
+    sessionDurations: [30, 60],
+    slots: [],
+  });
+  fakes.records.push({
+    mentor: "mentor-1",
+    timezone: "UTC",
+    sessionDurations: [30, 60],
+    specificDates: [
+      {
+        date: "2099-01-02",
+        slots: [{ startTime: "09:00", endTime: "12:00" }],
+      },
+    ],
+    weeklyHours: [],
+  });
+  await service.getAvailableSlots("mentor-1", 60, "mentee-1", {
+    correlationId: "corr-reschedule",
+    rescheduleRequestId: "request-1",
+  });
+  assert.deepEqual(blockerArgs, [
+    "mentor-1",
+    "mentee-1",
+    "corr-reschedule",
+    "request-1",
+  ]);
 });

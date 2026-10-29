@@ -15,7 +15,10 @@ const createDashboardController = ({ dashboardService }) => {
     try {
       return res.status(200).json({
         success: true,
-        data: await dashboardService.getUserGrowth(req.query.days, req.correlationId),
+        data: await dashboardService.getUserGrowth(
+          req.query.days,
+          req.correlationId,
+        ),
         message: "User growth data retrieved",
       });
     } catch (error) {
@@ -47,7 +50,28 @@ const createDashboardController = ({ dashboardService }) => {
     }
   };
 
-  return { getStats, getUserGrowth, getMentorIndustryStats, getEngagementStats };
+  const getEngagements = async (req, res, next) => {
+    try {
+      return res.status(200).json({
+        success: true,
+        data: await dashboardService.getEngagements(
+          req.query,
+          req.correlationId,
+        ),
+        message: "Engagements retrieved",
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  return {
+    getStats,
+    getUserGrowth,
+    getMentorIndustryStats,
+    getEngagementStats,
+    getEngagements,
+  };
 };
 
 module.exports = createDashboardController;

@@ -70,14 +70,17 @@ wallet by query-order accident.
 Payments also owns the escrow ledger operations under `/api/v1/escrow/pay`,
 `/pay-additional`, `/release`, `/refund`, and `/status`. Connect-request state
 remains in Mentoring Workspace and is changed only through the internal payment
-context boundary. A durable outbox and reconciliation process is still needed
-before using the cross-service financial flow in production.
+context boundary. Final session release has a durable Workspace pending marker,
+periodic retry, and a permanent unique Payments ledger key. Initial payment and
+refund projection recovery still need the D3 policy and live replica-set checks.
 
 Mentoring Workspace now owns the initial connect-request lifecycle under
 `/api/v1/connect-requests`: creation, request lists, mentor response, detail,
 ongoing reads, and mentee cancellation. Participant IDs are returned directly;
-Identity/Profile DTO decoration and Notifications/Realtime side effects remain
-follow-up boundaries.
+Identity participant names/emails are composed on request reads. Connect
+request toast events preserve the browser's `{ title, message, type }` contract;
+request state events preserve their request ID/status payload. Email and
+realtime side effects are implemented through Notifications and Socket.IO.
 
 Workspace also owns temporary checkout locks under `/api/v1/slot-locks`. Locks
 expire after ten minutes, are protected by a unique exact-slot index, and are
@@ -85,19 +88,20 @@ checked against both accepted Workspace requests and other active locks.
 
 Session slot operations are exposed under `/api/v1/sessions`: slot reads,
 trusted meeting links, two-party completion marks, additional slots,
-cancellation, and rescheduling. Payments release and Profile availability are
-kept as explicit cross-service boundaries.
+cancellation, and rescheduling. Payments release is retried safely after
+transient failures, and Profile reschedule availability follows the monolith's
+empty-schedule and request-only slot exclusions.
 
 ## Local foundation ports
 
-| Service | Port |
-| --- | ---: |
-| Identity & Access | 5001 |
-| Profile & Discovery | 5002 |
+| Service                        | Port |
+| ------------------------------ | ---: |
+| Identity & Access              | 5001 |
+| Profile & Discovery            | 5002 |
 | Mentoring Workspace & Realtime | 5003 |
-| Payments | 5004 |
-| Notifications & Support | 5005 |
-| Admin & Moderation | 5006 |
+| Payments                       | 5004 |
+| Notifications & Support        | 5005 |
+| Admin & Moderation             | 5006 |
 
 These are local development defaults. Kubernetes service ports will be
 configured later and will not be exposed directly to the browser.

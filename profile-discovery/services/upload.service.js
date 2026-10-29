@@ -15,15 +15,20 @@ const createUploadService = ({
   cloudinaryConfigured,
   streamifier,
   mentorProfileRepository,
+  identityClient,
+  workspaceClient,
   toMentorProfileDTO,
   logger = console,
 }) => {
   const uploadBuffer = (buffer, options) =>
     new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
-        if (error) return reject(new Error(extractErrorMessage(error)));
-        return resolve(result);
-      });
+      const stream = cloudinary.uploader.upload_stream(
+        options,
+        (error, result) => {
+          if (error) return reject(new Error(extractErrorMessage(error)));
+          return resolve(result);
+        },
+      );
       streamifier.createReadStream(buffer).pipe(stream);
     });
 
@@ -38,7 +43,8 @@ const createUploadService = ({
   };
 
   const processProfilePicture = async (filePayload, imageName) => {
-    if (!filePayload) throw new AppError("Payload missing: No file uploaded", 400);
+    if (!filePayload)
+      throw new AppError("Payload missing: No file uploaded", 400);
     if (!filePayload.mimetype?.startsWith("image/")) {
       throw new AppError("Only image files allowed for profile pictures", 400);
     }
@@ -65,11 +71,20 @@ const createUploadService = ({
       logger.error?.("Cloudinary profile picture upload failed", {
         error: error.message,
       });
-      throw new AppError("Failed to upload profile picture", 500, "UPLOAD_FAILED");
+      throw new AppError(
+        "Failed to upload profile picture",
+        500,
+        "UPLOAD_FAILED",
+      );
     }
   };
 
-  const processVerificationDocuments = async (currentUser, formFields, filePayloads) => {
+  const processVerificationDocuments = async (
+    currentUser,
+    formFields,
+    filePayloads,
+    { correlationId } = {},
+  ) => {
     const resumeFile = filePayloads?.resume?.[0];
     const workExperienceFiles = filePayloads?.workExperienceDocs || [];
     const phoneNumber = String(formFields?.phoneNumber || "").trim();
@@ -123,6 +138,28 @@ const createUploadService = ({
       );
 
       if (!profile) throw new Error("Profile not found");
+      try {
+        const [mentor] = await identityClient.getUserSummaries(
+          [currentUser._id],
+          correlationId,
+        );
+        if (mentor?.email) {
+          await workspaceClient.queueEmailEvent(
+            {
+              eventType: "profile.documents-submitted.email",
+              sourceEventId: `profile-documents-submitted:${currentUser._id}:${resumeResult.public_id}`,
+              mentorName: mentor.name,
+              mentorEmail: mentor.email,
+            },
+            correlationId,
+          );
+        }
+      } catch (emailError) {
+        logger.warn?.("Verification document email could not be queued", {
+          userId: String(currentUser._id),
+          error: emailError.message,
+        });
+      }
       return toMentorProfileDTO(profile);
     } catch (error) {
       logger.error?.("Verification upload failed, initiating rollback", {

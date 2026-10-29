@@ -19,13 +19,18 @@ const createAvailabilityService = ({
 }) => {
   const requireMentor = (user) => {
     if (!user?.roles?.includes("mentor")) {
-      throw new AppError("Access denied: mentor role required", 403, "ROLE_REQUIRED");
+      throw new AppError(
+        "Access denied: mentor role required",
+        403,
+        "ROLE_REQUIRED",
+      );
     }
   };
 
   const getMyAvailability = async (mentorId, { user } = {}) => {
     requireMentor(user);
-    const availability = await availabilityRepository.findAvailabilityByMentor(mentorId);
+    const availability =
+      await availabilityRepository.findAvailabilityByMentor(mentorId);
     if (!availability) {
       return {
         mentor: mentorId,
@@ -42,7 +47,8 @@ const createAvailabilityService = ({
 
   const createAvailability = async (mentorId, body, { user } = {}) => {
     requireMentor(user);
-    const existing = await availabilityRepository.findAvailabilityByMentor(mentorId);
+    const existing =
+      await availabilityRepository.findAvailabilityByMentor(mentorId);
     if (existing) {
       throw new AppError(
         "Availability already exists. Use PATCH /api/v1/availability/me to update.",
@@ -64,21 +70,33 @@ const createAvailabilityService = ({
   const updateAvailability = async (mentorId, body, { user } = {}) => {
     requireMentor(user);
     const updates = Object.fromEntries(
-      ALLOWED_UPDATE_FIELDS.filter((field) => Object.hasOwn(body || {}, field)).map(
-        (field) => [field, body[field]],
-      ),
+      ALLOWED_UPDATE_FIELDS.filter((field) =>
+        Object.hasOwn(body || {}, field),
+      ).map((field) => [field, body[field]]),
     );
     if (Object.keys(updates).length === 0) {
-      throw new AppError("No valid fields provided to update", 400, "INVALID_UPDATE");
+      throw new AppError(
+        "No valid fields provided to update",
+        400,
+        "INVALID_UPDATE",
+      );
     }
-    const availability = await availabilityRepository.updateAvailability(mentorId, updates);
+    const availability = await availabilityRepository.updateAvailability(
+      mentorId,
+      updates,
+    );
     return toAvailabilityDTO(availability);
   };
 
   const getMentorAvailability = async (mentorId) => {
-    const availability = await availabilityRepository.findAvailabilityByMentor(mentorId);
+    const availability =
+      await availabilityRepository.findAvailabilityByMentor(mentorId);
     if (!availability) {
-      throw new AppError("Availability not set by this mentor", 404, "AVAILABILITY_NOT_FOUND");
+      throw new AppError(
+        "Availability not set by this mentor",
+        404,
+        "AVAILABILITY_NOT_FOUND",
+      );
     }
     return {
       timezone: availability.timezone,
@@ -96,21 +114,38 @@ const createAvailabilityService = ({
     mentorId,
     duration,
     userId,
-    { correlationId } = {},
+    { correlationId, rescheduleRequestId } = {},
   ) => {
     if (!ALLOWED_DURATIONS.has(duration)) {
-      throw new AppError("Duration must be 30, 45, or 60 minutes", 400, "INVALID_DURATION");
+      throw new AppError(
+        "Duration must be 30, 45, or 60 minutes",
+        400,
+        "INVALID_DURATION",
+      );
     }
 
-    const availability = await availabilityRepository.findAvailabilityByMentor(mentorId);
+    const availability =
+      await availabilityRepository.findAvailabilityByMentor(mentorId);
     if (!availability) {
-      throw new AppError("Availability not set by this mentor", 404, "AVAILABILITY_NOT_FOUND");
+      if (rescheduleRequestId) {
+        return {
+          timezone: "Asia/Kolkata",
+          sessionDurations: [30, 60],
+          slots: [],
+        };
+      }
+      throw new AppError(
+        "Availability not set by this mentor",
+        404,
+        "AVAILABILITY_NOT_FOUND",
+      );
     }
 
     const blockers = await workspaceClient.getSlotBlockers(
       mentorId,
       userId,
       correlationId,
+      rescheduleRequestId,
     );
     const bookedSlots = blockers?.bookedSlots || [];
     const lockedSlots = blockers?.lockedSlots || [];

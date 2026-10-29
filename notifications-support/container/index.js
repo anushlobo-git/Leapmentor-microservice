@@ -114,6 +114,7 @@ const supportMessageRepository = createSupportMessageRepository(SupportMessage);
 const supportMessageService = createSupportMessageService({
   supportMessageRepository,
   notificationService,
+  reportEmailService,
 });
 const supportController = createSupportController({
   supportService: supportMessageService,

@@ -20,10 +20,16 @@ const createProfileClient = ({ httpClient }) => ({
     duration,
     excludeUserId,
     correlationId,
+    requestId,
   ) => {
+    const params = new URLSearchParams({
+      duration: String(duration),
+      excludeUserId: excludeUserId || "",
+    });
+    if (requestId) params.set("requestId", requestId);
     const response = await httpClient.request({
       method: "GET",
-      path: `/internal/v1/mentors/${encodeURIComponent(mentorId)}/availability?duration=${encodeURIComponent(duration)}&excludeUserId=${encodeURIComponent(excludeUserId || "")}`,
+      path: `/internal/v1/mentors/${encodeURIComponent(mentorId)}/availability?${params}`,
       correlationId,
     });
     return response?.data;

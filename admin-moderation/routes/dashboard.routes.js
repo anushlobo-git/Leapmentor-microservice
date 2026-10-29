@@ -1,4 +1,5 @@
 const express = require("express");
+const validateEngagementQuery = require("../middleware/engagementValidation");
 
 const createDashboardRouter = ({ controller, authenticate }) => {
   const router = express.Router();
@@ -7,6 +8,11 @@ const createDashboardRouter = ({ controller, authenticate }) => {
   router.get("/user-growth", controller.getUserGrowth);
   router.get("/stats/mentor-industries", controller.getMentorIndustryStats);
   router.get("/engagements/stats", controller.getEngagementStats);
+  router.get(
+    "/engagements",
+    validateEngagementQuery,
+    controller.getEngagements,
+  );
   return router;
 };
 

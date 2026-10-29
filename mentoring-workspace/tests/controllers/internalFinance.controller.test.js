@@ -76,3 +76,46 @@ test("rejects incomplete or oversized invoice email events before publishing", a
     413,
   );
 });
+
+test("queues non-invoice email events through the durable notification outbox", async () => {
+  const events = [];
+  const controller = createInternalFinanceController({
+    financeRepository: {},
+    identityClient: {},
+    profileClient: {},
+    notificationClient: {
+      publish: async (event, correlationId) => {
+        events.push({ event, correlationId });
+        return { delivered: true };
+      },
+    },
+  });
+  const res = {
+    statusCode: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+
+  await controller.queueEmailEvent(
+    {
+      body: {
+        eventType: "payment.received.email",
+        sourceEventId: "payment-received:request-1",
+        mentorEmail: "mentor@example.com",
+      },
+      correlationId: "corr-email",
+    },
+    res,
+    assert.fail,
+  );
+
+  assert.equal(res.statusCode, 202);
+  assert.equal(events[0].event.eventType, "payment.received.email");
+  assert.equal(events[0].correlationId, "corr-email");
+});

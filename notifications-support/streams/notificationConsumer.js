@@ -55,14 +55,13 @@ const createNotificationConsumer = ({
                 sourceEventId: parsed.payload.sourceEventId || parsed.eventId,
               }
             : parsed;
-        if (
-          event.eventType === "report.submitted.email" ||
-          event.eventType === "report.resolved.email" ||
-          event.eventType === "payment.invoice.email"
-        ) {
+        if (event.eventType?.endsWith(".email")) {
           if (!reportEmailService)
             throw new Error("Report email delivery is not configured");
-          await reportEmailService.sendReportEvent(event);
+          const sendEmail =
+            reportEmailService.sendEmailEvent ||
+            reportEmailService.sendReportEvent;
+          await sendEmail(event);
         } else {
           await notificationService.createFromEvent(event);
         }

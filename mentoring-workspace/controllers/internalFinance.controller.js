@@ -127,20 +127,16 @@ const createInternalFinanceController = ({
         !event.reporterEmail ||
         !event.invoicePdfBase64
       ) {
-        return res
-          .status(400)
-          .json({
-            error: "Invoice email event is incomplete",
-            code: "INVALID_INVOICE_EMAIL_EVENT",
-          });
+        return res.status(400).json({
+          error: "Invoice email event is incomplete",
+          code: "INVALID_INVOICE_EMAIL_EVENT",
+        });
       }
       if (event.invoicePdfBase64.length > 4_000_000) {
-        return res
-          .status(413)
-          .json({
-            error: "Invoice attachment is too large",
-            code: "INVOICE_ATTACHMENT_TOO_LARGE",
-          });
+        return res.status(413).json({
+          error: "Invoice attachment is too large",
+          code: "INVOICE_ATTACHMENT_TOO_LARGE",
+        });
       }
       const result = await notificationClient.publish(
         { ...event, eventType: "payment.invoice.email" },
@@ -154,12 +150,39 @@ const createInternalFinanceController = ({
     }
   };
 
+  const queueEmailEvent = async (req, res, next) => {
+    try {
+      const event = req.body || {};
+      if (!event.sourceEventId || !event.eventType?.endsWith(".email")) {
+        return res.status(400).json({
+          error: "Email event is incomplete",
+          code: "INVALID_EMAIL_EVENT",
+        });
+      }
+      if (event.invoicePdfBase64?.length > 4_000_000) {
+        return res.status(413).json({
+          error: "Invoice attachment is too large",
+          code: "INVOICE_ATTACHMENT_TOO_LARGE",
+        });
+      }
+      const result = await notificationClient.publish(event, req.correlationId);
+      return res.status(202).json({
+        success: true,
+        data: result,
+        message: "Email event queued",
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
   return {
     getInvoiceContext,
     getMentorSessions,
     getPayouts,
     getMentorRating,
     queueInvoiceEmail,
+    queueEmailEvent,
   };
 };
 

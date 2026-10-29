@@ -21,6 +21,7 @@ const createUploadController = ({ uploadService }) => {
         req.user,
         req.body,
         req.files,
+        { correlationId: req.correlationId },
       );
       return res.status(200).json({
         success: true,

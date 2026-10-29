@@ -115,3 +115,51 @@ test("records failures and rejects malformed report email events", async () => {
     code: "INVALID_REPORT_EMAIL_EVENT",
   });
 });
+
+test("persists a failed email payload and drains it successfully on retry", async () => {
+  const records = new Map();
+  let shouldFail = true;
+  const service = createReportEmailService({
+    sendEmail: async () => {
+      if (shouldFail) throw new Error("smtp unavailable");
+    },
+    emailDeliveryRepository: {
+      findBySourceEventId: async (id) => records.get(id) || null,
+      createPending: async (id, payload) => {
+        records.set(id, { sourceEventId: id, status: "pending", payload });
+      },
+      findPending: async () =>
+        [...records.values()].filter((item) => item.status === "failed"),
+      claimForSending: async (id) => {
+        const record = records.get(id);
+        if (!record || record.status === "sent") return null;
+        record.status = "sending";
+        return record;
+      },
+      markSent: async (id) => {
+        records.get(id).status = "sent";
+      },
+      markFailed: async (id, lastError) => {
+        Object.assign(records.get(id), { status: "failed", lastError });
+      },
+    },
+  });
+  const event = {
+    eventType: "support.resolved.email",
+    sourceEventId: "support.ticket:ticket-1:resolved:email",
+    toEmail: "user@example.com",
+    subject: "Help",
+  };
+
+  await assert.rejects(service.sendEmailEvent(event), /smtp unavailable/);
+  assert.equal(
+    records.get(event.sourceEventId).payload.eventType,
+    event.eventType,
+  );
+  shouldFail = false;
+  assert.deepEqual(await service.drainPendingEmailEvents(), {
+    attempted: 1,
+    sent: 1,
+  });
+  assert.equal(records.get(event.sourceEventId).status, "sent");
+});

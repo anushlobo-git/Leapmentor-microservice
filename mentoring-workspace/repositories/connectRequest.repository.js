@@ -74,6 +74,15 @@ const createConnectRequestRepository = (ConnectRequest) => {
 
   const countByStatus = (status) => ConnectRequest.countDocuments({ status });
 
+  const countByFilter = (filter) => ConnectRequest.countDocuments(filter);
+
+  const findEngagements = (filter, { skip, limit }) =>
+    ConnectRequest.find(filter)
+      .sort({ requestedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
   const updatePendingResponse = (id, mentor, update) =>
     ConnectRequest.findOneAndUpdate(
       { _id: id, mentor, status: "pending" },
@@ -112,6 +121,8 @@ const createConnectRequestRepository = (ConnectRequest) => {
     findSessionsByMonth,
     countCompletedSessionsByUser,
     countByStatus,
+    countByFilter,
+    findEngagements,
     updatePendingResponse,
     updateMenteeRequest,
     deleteRequest,

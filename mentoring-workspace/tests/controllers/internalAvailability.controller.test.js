@@ -9,12 +9,22 @@ test("returns normalized booked and locked slot blockers", async () => {
       findBookedRequestsByMentor: async () => [
         {
           selectedSlots: [
-            { date: "2099-01-02", startTime: "09:00", endTime: "10:00", extra: "ignored" },
+            {
+              date: "2099-01-02",
+              startTime: "09:00",
+              endTime: "10:00",
+              extra: "ignored",
+            },
           ],
         },
       ],
       findActiveLocksByMentor: async () => [
-        { date: "2099-01-02", startTime: "10:00", endTime: "11:00", extra: "ignored" },
+        {
+          date: "2099-01-02",
+          startTime: "10:00",
+          endTime: "11:00",
+          extra: "ignored",
+        },
       ],
     },
   });
@@ -40,5 +50,79 @@ test("returns normalized booked and locked slot blockers", async () => {
   assert.deepEqual(response.body.data, {
     bookedSlots: [{ date: "2099-01-02", startTime: "09:00", endTime: "10:00" }],
     lockedSlots: [{ date: "2099-01-02", startTime: "10:00", endTime: "11:00" }],
+  });
+});
+
+test("reschedule blocker mode returns only original request slots", async () => {
+  let requestLookup;
+  let globalLookupCalled = false;
+  const controller = createController({
+    availabilityBlockerRepository: {
+      findRequestSlotsById: async (...args) => {
+        requestLookup = args;
+        return {
+          selectedSlots: [
+            {
+              date: "2099-01-02",
+              startTime: "09:00",
+              endTime: "10:00",
+              status: "booked",
+            },
+            {
+              date: "2099-01-03",
+              startTime: "09:00",
+              endTime: "10:00",
+              status: "cancelled",
+            },
+          ],
+          additionalSlots: [
+            {
+              date: "2099-01-04",
+              startTime: "09:00",
+              endTime: "10:00",
+              status: "cancelled",
+            },
+          ],
+        };
+      },
+      findBookedRequestsByMentor: async () => {
+        globalLookupCalled = true;
+        return [];
+      },
+      findActiveLocksByMentor: async () => {
+        globalLookupCalled = true;
+        return [];
+      },
+    },
+  });
+  const response = {};
+  const res = {
+    status(code) {
+      response.statusCode = code;
+      return this;
+    },
+    json(body) {
+      response.body = body;
+      return this;
+    },
+  };
+
+  await controller.getBlockers(
+    {
+      params: { mentorId: "mentor-1" },
+      query: { requestId: "request-1", excludeUserId: "mentee-1" },
+    },
+    res,
+    assert.fail,
+  );
+
+  assert.deepEqual(requestLookup, ["request-1", "mentor-1"]);
+  assert.equal(globalLookupCalled, false);
+  assert.deepEqual(response.body.data, {
+    bookedSlots: [
+      { date: "2099-01-02", startTime: "09:00", endTime: "10:00" },
+      { date: "2099-01-04", startTime: "09:00", endTime: "10:00" },
+    ],
+    lockedSlots: [],
   });
 });

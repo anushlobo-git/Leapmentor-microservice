@@ -8,6 +8,9 @@ const createTransactionRepository = (Transaction) => {
       .limit(limit)
       .lean();
 
+  const findEscrowReleaseByKey = (idempotencyKey) =>
+    Transaction.findOne({ type: "escrow_release", idempotencyKey }).lean();
+
   const createTransaction = async (data, session) => {
     const created = await Transaction.create(
       [data],
@@ -22,6 +25,7 @@ const createTransactionRepository = (Transaction) => {
   return {
     countTransactions,
     findTransactions,
+    findEscrowReleaseByKey,
     createTransaction,
     createMany,
   };

@@ -3,7 +3,9 @@ const mongoose = require("mongoose");
 const createInternalAdminVerificationController = ({
   mentorProfileRepository,
   identityClient,
+  workspaceClient,
   toMentorProfileDTO,
+  logger = console,
 }) => {
   const requireId = (value, res) => {
     if (!mongoose.Types.ObjectId.isValid(value)) {
@@ -23,16 +25,21 @@ const createInternalAdminVerificationController = ({
 
   const list = async (req, res, next) => {
     try {
-      const profiles = await mentorProfileRepository.findAllMentorProfilesForAdmin();
+      const profiles =
+        await mentorProfileRepository.findAllMentorProfilesForAdmin();
       const users = await identityClient.getUserSummaries(
         profiles.map((profile) => profile.user.toString()),
         req.correlationId,
       );
-      const userById = new Map(users.map((user) => [user._id.toString(), user]));
+      const userById = new Map(
+        users.map((user) => [user._id.toString(), user]),
+      );
       return res.status(200).json({
         success: true,
         data: {
-          mentors: profiles.map((profile) => mapWithUser(profile, userById.get(profile.user.toString()))),
+          mentors: profiles.map((profile) =>
+            mapWithUser(profile, userById.get(profile.user.toString())),
+          ),
           total: profiles.length,
         },
         message: "Mentor verifications retrieved",
@@ -45,9 +52,10 @@ const createInternalAdminVerificationController = ({
   const getById = async (req, res, next) => {
     if (!requireId(req.params.mentorProfileId, res)) return;
     try {
-      const profile = await mentorProfileRepository.findMentorProfileByIdForAdmin(
-        req.params.mentorProfileId,
-      );
+      const profile =
+        await mentorProfileRepository.findMentorProfileByIdForAdmin(
+          req.params.mentorProfileId,
+        );
       if (!profile) {
         return res.status(404).json({
           error: "Mentor profile not found",
@@ -71,9 +79,10 @@ const createInternalAdminVerificationController = ({
   const updateStatus = (verificationStatus) => async (req, res, next) => {
     if (!requireId(req.params.mentorProfileId, res)) return;
     try {
-      const profile = await mentorProfileRepository.findMentorProfileByIdForAdminMutable(
-        req.params.mentorProfileId,
-      );
+      const profile =
+        await mentorProfileRepository.findMentorProfileByIdForAdminMutable(
+          req.params.mentorProfileId,
+        );
       if (!profile) {
         return res.status(404).json({
           error: "Mentor profile not found",
@@ -88,6 +97,33 @@ const createInternalAdminVerificationController = ({
       }
       profile.verificationStatus = verificationStatus;
       await mentorProfileRepository.saveMentorProfile(profile);
+      if (
+        verificationStatus === "verified" &&
+        workspaceClient?.queueEmailEvent
+      ) {
+        try {
+          const [mentor] = await identityClient.getUserSummaries(
+            [profile.user.toString()],
+            req.correlationId,
+          );
+          if (mentor?.email) {
+            await workspaceClient.queueEmailEvent(
+              {
+                eventType: "profile.mentor-verified.email",
+                sourceEventId: `profile-mentor-verified:${profile._id}`,
+                mentorName: mentor.name,
+                mentorEmail: mentor.email,
+              },
+              req.correlationId,
+            );
+          }
+        } catch (emailError) {
+          logger.warn?.("Mentor verification email could not be queued", {
+            mentorProfileId: String(profile._id),
+            error: emailError.message,
+          });
+        }
+      }
       return res.status(200).json({
         success: true,
         data: {

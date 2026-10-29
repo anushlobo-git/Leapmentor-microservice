@@ -1,3 +1,7 @@
+const path = require("node:path");
+
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+
 const getEnv = (key, fallback) => {
   const value = process.env[key];
   return value === undefined ? fallback : value;

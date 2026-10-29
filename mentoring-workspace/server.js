@@ -25,6 +25,7 @@ container.createMessageSocketHandler({
 
 let server;
 let notificationOutboxTimer;
+let escrowReleaseRetryTimer;
 let socketRedisAdapter;
 
 const startServer = async () => {
@@ -65,6 +66,23 @@ const startServer = async () => {
           `Notification outbox drain failed: ${error.message}\n`,
         );
       });
+      await container.sessionService
+        ?.retryPendingEscrowReleases("workspace-startup")
+        .catch((error) => {
+          process.stderr.write(
+            `Escrow release recovery failed: ${error.message}\n`,
+          );
+        });
+      escrowReleaseRetryTimer = setInterval(() => {
+        container.sessionService
+          ?.retryPendingEscrowReleases("workspace-retry")
+          .catch((error) => {
+            process.stderr.write(
+              `Escrow release retry failed: ${error.message}\n`,
+            );
+          });
+      }, 10000);
+      escrowReleaseRetryTimer.unref?.();
       notificationOutboxTimer = setInterval(() => {
         container.notificationClient?.drain().catch((error) => {
           process.stderr.write(
@@ -95,6 +113,7 @@ const shutdown = (signal) => {
     return;
   }
   if (notificationOutboxTimer) clearInterval(notificationOutboxTimer);
+  if (escrowReleaseRetryTimer) clearInterval(escrowReleaseRetryTimer);
   io.close();
   socketRedisAdapter?.close().catch((error) => {
     process.stderr.write(

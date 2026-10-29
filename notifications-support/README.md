@@ -60,8 +60,10 @@ npm run dev
 
 The local default port is `5005`. MongoDB stores notification and support
 records. Set `REDIS_ENABLED` and the stream configuration for event consumption.
-Set `GROQ_API_KEY` to use AI chat. See [`.env.example`](./.env.example) for all
-settings; do not commit `.env` or real credentials.
+Set `GROQ_API_KEY` to use AI chat. Configure the `SMTP_*` variables for email
+delivery and the Admin service URL/token for administrator session validation.
+See [`.env.example`](./.env.example) for all settings; do not commit `.env` or
+real credentials.
 
 Run the tests with:
 

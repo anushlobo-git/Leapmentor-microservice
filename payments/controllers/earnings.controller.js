@@ -1,3 +1,5 @@
+const crypto = require("node:crypto");
+
 const createEarningsController = ({ earningsService }) => ({
   getEarningsSummary: async (req, res, next) => {
     try {
@@ -46,11 +48,15 @@ const createEarningsController = ({ earningsService }) => ({
   },
   withdrawEarnings: async (req, res, next) => {
     try {
+      const suppliedKey = req.get("Idempotency-Key");
+      const idempotencyKey =
+        suppliedKey ||
+        `earnings-withdrawal:${req.user._id}:${crypto.randomUUID()}`;
       return res.status(200).json({
         success: true,
         data: await earningsService.withdrawEarningsService(
           req.user._id,
-          req.get("Idempotency-Key"),
+          idempotencyKey,
           req.correlationId,
         ),
         message: "Withdrawal request submitted successfully",
