@@ -212,6 +212,11 @@ const createSessionService = ({
         400,
         "SLOT_CANCELLED",
       );
+    // Older requests may not have these fields. Normalize them before
+    // applying the participant mark so the persisted response matches the
+    // legacy backend and feedback can evaluate the same slot state.
+    if (typeof slot.menteeMarked !== "boolean") slot.menteeMarked = false;
+    if (typeof slot.mentorMarked !== "boolean") slot.mentorMarked = false;
     const isMentee = String(request.mentee) === String(userId);
     const markField = isMentee ? "menteeMarked" : "mentorMarked";
     if (slot[markField])

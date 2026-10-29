@@ -362,14 +362,18 @@ const createEscrowService = ({
     let response;
     try {
       response = await runInTransaction(async (session) => {
-        const [menteeWallet, mentorWallet] = await Promise.all([
-          walletRepository.findByUserIdAndRole(menteeId, ROLE_MENTEE, session),
-          walletRepository.findByUserIdAndRole(
-            context.mentor,
-            ROLE_MENTOR,
-            session,
-          ),
-        ]);
+        // MongoDB transactions must not run parallel operations on the same
+        // session. Read the two wallets sequentially before updating them.
+        const menteeWallet = await walletRepository.findByUserIdAndRole(
+          menteeId,
+          ROLE_MENTEE,
+          session,
+        );
+        const mentorWallet = await walletRepository.findByUserIdAndRole(
+          context.mentor,
+          ROLE_MENTOR,
+          session,
+        );
         if (!menteeWallet || !mentorWallet)
           throw new AppError("Required wallet not found", 404);
         if (menteeWallet.escrow < total)

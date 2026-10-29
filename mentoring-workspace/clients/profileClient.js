@@ -1,4 +1,12 @@
 const createProfileClient = ({ httpClient }) => ({
+  getMentorProfile: async (mentorId, correlationId) => {
+    const response = await httpClient.request({
+      method: "GET",
+      path: `/internal/v1/mentors/${encodeURIComponent(mentorId)}/profile`,
+      correlationId,
+    });
+    return response?.data || { hourlyRate: null };
+  },
   getMentorRating: async (mentorId, correlationId) => {
     const response = await httpClient.request({
       method: "GET",

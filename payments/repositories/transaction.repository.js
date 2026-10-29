@@ -19,8 +19,14 @@ const createTransactionRepository = (Transaction) => {
     return created[0];
   };
 
+  // Mongoose requires ordered=true when creating multiple documents with a
+  // session. Escrow release writes three ledger rows in one transaction; the
+  // previous call aborted that transaction in the local Mongo setup.
   const createMany = (transactionData, session) =>
-    Transaction.create(transactionData, session ? { session } : {});
+    Transaction.create(
+      transactionData,
+      session ? { session, ordered: true } : {},
+    );
 
   return {
     countTransactions,

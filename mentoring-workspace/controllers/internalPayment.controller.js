@@ -1,4 +1,7 @@
-const createInternalPaymentController = ({ connectRequestPaymentRepository }) => {
+const createInternalPaymentController = ({
+  connectRequestPaymentRepository,
+  profileClient,
+}) => {
   const getPaymentContext = async (req, res, next) => {
     try {
       const context = await connectRequestPaymentRepository.findPaymentContext(
@@ -10,9 +13,27 @@ const createInternalPaymentController = ({ connectRequestPaymentRepository }) =>
           code: "CONNECT_REQUEST_NOT_FOUND",
         });
       }
+      let paymentContext = context;
+      if (paymentContext.sessionRate == null && paymentContext.mentor) {
+        const profile = await profileClient?.getMentorProfile?.(
+          paymentContext.mentor,
+          req.correlationId,
+        );
+        const sessionRate = Number(profile?.hourlyRate);
+        const sessionCount =
+          paymentContext.sessionCount || paymentContext.selectedSlots?.length;
+        if (Number.isFinite(sessionRate) && sessionRate >= 1 && sessionCount >= 1) {
+          paymentContext = {
+            ...paymentContext,
+            sessionRate,
+            sessionCount,
+            totalAmount: sessionRate * sessionCount,
+          };
+        }
+      }
       return res.status(200).json({
         success: true,
-        data: context,
+        data: paymentContext,
         message: "Payment context retrieved",
       });
     } catch (error) {

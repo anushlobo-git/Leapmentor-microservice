@@ -4,6 +4,21 @@ const createInternalMentorLookupController = ({
   availabilityService,
   toMentorSearchDTO,
 }) => {
+  const getProfile = async (req, res, next) => {
+    try {
+      const profile = await mentorProfileRepository.findMentorProfileByUserId(
+        req.params.mentorId,
+      );
+      return res.status(200).json({
+        success: true,
+        data: { hourlyRate: profile?.hourlyRate ?? null },
+        message: "Mentor profile retrieved",
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
   const getSimilarMentors = async (req, res, next) => {
     try {
       const profile = await mentorProfileRepository.findMentorProfileByUserId(
@@ -89,7 +104,7 @@ const createInternalMentorLookupController = ({
     }
   };
 
-  return { getSimilarMentors, getAvailability };
+  return { getProfile, getSimilarMentors, getAvailability };
 };
 
 module.exports = createInternalMentorLookupController;

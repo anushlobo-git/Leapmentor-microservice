@@ -16,8 +16,18 @@ const startServer = async (container) => {
 test("Workspace payment context route requires the Payments service token", async () => {
   const controller = createInternalPaymentController({
     connectRequestPaymentRepository: {
-      findPaymentContext: async () => ({ _id: "request-1" }),
+      findPaymentContext: async () => ({
+        _id: "request-1",
+        mentor: "mentor-1",
+        sessionCount: 1,
+        sessionRate: null,
+        totalAmount: null,
+        selectedSlots: [{ date: "2099-01-01" }],
+      }),
       updatePaymentState: async () => ({ _id: "request-1" }),
+    },
+    profileClient: {
+      getMentorProfile: async () => ({ hourlyRate: 125 }),
     },
   });
   const serverDetails = await startServer({
@@ -27,10 +37,19 @@ test("Workspace payment context route requires the Payments service token", asyn
   });
 
   try {
-    const response = await fetch(
+    const unauthorized = await fetch(
       `${serverDetails.url}/internal/v1/connect-requests/request-1/payment-context`,
     );
-    assert.equal(response.status, 401);
+    assert.equal(unauthorized.status, 401);
+
+    const response = await fetch(
+      `${serverDetails.url}/internal/v1/connect-requests/request-1/payment-context`,
+      { headers: { Authorization: "Bearer payments-token" } },
+    );
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.data.sessionRate, 125);
+    assert.equal(body.data.totalAmount, 125);
   } finally {
     await new Promise((resolve) => serverDetails.server.close(resolve));
   }

@@ -139,12 +139,6 @@ const internalAdminPaymentsRouter = createInternalAdminPaymentsRouter({
 });
 const connectRequestPaymentRepository =
   createConnectRequestPaymentRepository(ConnectRequest);
-const internalPaymentController = createInternalPaymentController({
-  connectRequestPaymentRepository,
-});
-const internalPaymentRouter = createInternalPaymentRouter({
-  internalPaymentController,
-});
 const financeRepository = createFinanceRepository(ConnectRequest);
 const notificationsHttpClient = createInternalHttpClient({
   baseUrl: env.notificationsServiceUrl,
@@ -167,10 +161,17 @@ const notificationClient = createNotificationClient({
 const reportRepository = createReportRepository(Report);
 const profileHttpClient = createInternalHttpClient({
   baseUrl: env.profileServiceUrl,
-  serviceToken: env.profileServiceToken,
+  serviceToken: env.internalServiceToken,
   timeoutMs: env.internalRequestTimeoutMs,
 });
 const profileClient = createProfileClient({ httpClient: profileHttpClient });
+const internalPaymentController = createInternalPaymentController({
+  connectRequestPaymentRepository,
+  profileClient,
+});
+const internalPaymentRouter = createInternalPaymentRouter({
+  internalPaymentController,
+});
 const paymentsHttpClient = createInternalHttpClient({
   baseUrl: env.paymentsServiceUrl,
   serviceToken: env.paymentsServiceToken,

@@ -81,6 +81,9 @@ const createService = () => {
             id === "mentee-1" ? "mentee@example.com" : "mentor@example.com",
         })),
     },
+    profileClient: {
+      getMentorProfile: async () => ({ hourlyRate: 125 }),
+    },
     realtimePublisher: {
       publishToUser: (recipient, event, payload) => {
         realtimeEvents.push({ recipient, event, payload });
@@ -127,7 +130,6 @@ test("lets the mentor accept a pending request and records the confirmed slot", 
       { date: "2099-01-01", startTime: "10:00", endTime: "11:00" },
     ],
   });
-
   const accepted = await service.respondToRequest(created._id, "mentor-1", {
     status: "accepted",
     confirmedSlot: { date: "2099-01-01", startTime: "10:00", endTime: "11:00" },
@@ -147,6 +149,27 @@ test("lets the mentor accept a pending request and records the confirmed slot", 
       (event) => event.eventType === "connect.request.accepted.email",
     ),
   );
+});
+
+test("resolves a missing session rate from the mentor profile when accepting", async () => {
+  const { service } = createService();
+  const created = await service.sendConnectRequest("mentee-1", {
+    mentorId: "mentor-1",
+    selectedSlots: [
+      { date: "2099-01-01", startTime: "10:00", endTime: "11:00" },
+    ],
+  });
+  created.sessionRate = null;
+  created.totalAmount = null;
+
+  const accepted = await service.respondToRequest(created._id, "mentor-1", {
+    status: "accepted",
+    confirmedSlot: { date: "2099-01-01", startTime: "10:00", endTime: "11:00" },
+  });
+
+  assert.equal(accepted.sessionRate, 125);
+  assert.equal(accepted.sessionCount, 1);
+  assert.equal(accepted.totalAmount, 125);
 });
 
 test("new connect request socket toast contains the frontend toast fields", async () => {

@@ -123,16 +123,29 @@ const createConnectRequestService = ({
         );
       }
     }
-    const count = Number(sessionCount || selectedSlots.length);
-    const rate = sessionRate === undefined ? null : Number(sessionRate);
+    let rate = sessionRate === undefined ? null : Number(sessionRate);
+    if (rate == null) {
+      const profile = await profileClient?.getMentorProfile?.(
+        mentorId,
+        correlationId,
+      );
+      rate = profile?.hourlyRate ?? null;
+    }
+    if (!Number.isFinite(Number(rate)) || Number(rate) < 1)
+      throw new AppError(
+        "sessionRate must be provided or stored on the mentor profile",
+        400,
+        "INVALID_SESSION_RATE",
+      );
+    const count = selectedSlots.length;
     const request = await connectRequestRepository.createRequest({
       mentee: menteeId,
       mentor: mentorId,
       message: String(message || "").trim(),
       selectedSlots: selectedSlots.map(safeSlot),
-      sessionRate: rate,
+      sessionRate: Number(rate),
       sessionCount: count,
-      totalAmount: rate == null ? null : rate * count,
+      totalAmount: Number(rate) * count,
       status: "pending",
       paymentStatus: "unpaid",
       requestedAt: new Date(),
@@ -215,6 +228,35 @@ const createConnectRequestService = ({
           "SLOT_TAKEN",
         );
     }
+    const requestBeforeUpdate = await connectRequestRepository.findById(requestId);
+    if (!requestBeforeUpdate)
+      throw new AppError(
+        "Request not found or already responded",
+        404,
+        "REQUEST_NOT_FOUND",
+      );
+    let sessionRate = requestBeforeUpdate.sessionRate;
+    const sessionCount =
+      requestBeforeUpdate.sessionCount || requestBeforeUpdate.selectedSlots?.length;
+    if (status === "accepted" && sessionRate == null) {
+      const profile = await profileClient?.getMentorProfile?.(
+        mentorId,
+        correlationId,
+      );
+      sessionRate = profile?.hourlyRate;
+      if (!Number.isFinite(Number(sessionRate)) || Number(sessionRate) < 1)
+        throw new AppError(
+          "Unable to accept request without a valid session rate. Please update the mentor hourly rate.",
+          400,
+          "INVALID_SESSION_RATE",
+        );
+    }
+    if (status === "accepted" && (!sessionCount || sessionCount < 1))
+      throw new AppError(
+        "Unable to accept request without a valid session count.",
+        400,
+        "INVALID_SESSION_COUNT",
+      );
     const request = await connectRequestRepository.updatePendingResponse(
       requestId,
       mentorId,
@@ -225,7 +267,9 @@ const createConnectRequestService = ({
           : {}),
         respondedAt: new Date(),
         ...(status === "accepted" && {
-          sessionCount: body.sessionCount || undefined,
+          sessionRate: Number(sessionRate),
+          sessionCount,
+          totalAmount: Number(sessionRate) * sessionCount,
         }),
       },
     );

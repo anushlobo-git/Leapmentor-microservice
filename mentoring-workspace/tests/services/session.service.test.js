@@ -89,13 +89,16 @@ test("accepts trusted meeting links and rejects untrusted domains", async () => 
 });
 
 test("marks completion per participant and prevents duplicate marks", async () => {
-  const { service } = createService();
+  const { service, request } = createService();
   const first = await service.markSlotComplete({
     connectRequestId: "request-1",
     slotIndex: "0",
     userId: "mentee-1",
   });
   assert.equal(first.bothMarked, false);
+  assert.equal(first.slot.menteeMarked, true);
+  assert.equal(first.slot.mentorMarked, false);
+  assert.equal(request.selectedSlots[0].menteeMarked, true);
   await assert.rejects(
     service.markSlotComplete({
       connectRequestId: "request-1",

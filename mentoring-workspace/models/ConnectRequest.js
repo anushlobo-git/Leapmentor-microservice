@@ -6,6 +6,10 @@ const selectedSlotSchema = new mongoose.Schema(
     startTime: String,
     endTime: String,
     status: String,
+    meetingLink: String,
+    menteeMarked: { type: Boolean, default: false },
+    mentorMarked: { type: Boolean, default: false },
+    completedAt: Date,
   },
   { _id: false, strict: false },
 );

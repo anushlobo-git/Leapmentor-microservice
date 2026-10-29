@@ -35,7 +35,10 @@ const startServer = async () => {
       internalMentorLookupRouter: createLookupRouter({
         controller: createLookupController({
           mentorProfileRepository: {
-            findMentorProfileByUserId: async () => ({ skills: [] }),
+            findMentorProfileByUserId: async () => ({
+              skills: [],
+              hourlyRate: 125,
+            }),
           },
           identityClient: { getUserSummaries: async () => [] },
           availabilityService: {
@@ -111,6 +114,21 @@ test("mentor lookup route forwards request ID for session reschedule availabilit
     );
     assert.ok(setup.availabilityCalls[0][3].correlationId);
     assert.deepEqual((await response.json()).data.slots, []);
+  } finally {
+    await new Promise((resolve) => setup.server.close(resolve));
+  }
+});
+
+test("mentor profile lookup exposes the stored hourly rate to Workspace", async () => {
+  const setup = await startServer();
+  const baseUrl = `http://127.0.0.1:${setup.server.address().port}`;
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/v1/mentors/mentor-1/profile`,
+      { headers: { Authorization: "Bearer workspace-token" } },
+    );
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).data.hourlyRate, 125);
   } finally {
     await new Promise((resolve) => setup.server.close(resolve));
   }
