@@ -83,7 +83,7 @@ const createConnectRequestService = ({
   };
 
   const sendConnectRequest = async (menteeId, body, correlationId) => {
-    const { mentorId, message, selectedSlots, sessionRate, sessionCount } =
+    const { mentorId, message, selectedSlots, sessionRate } =
       body || {};
     if (!mentorId)
       throw new AppError("mentorId is required", 400, "MENTOR_REQUIRED");
@@ -124,7 +124,7 @@ const createConnectRequestService = ({
       }
     }
     let rate = sessionRate === undefined ? null : Number(sessionRate);
-    if (rate == null) {
+    if (rate === null || rate === undefined) {
       const profile = await profileClient?.getMentorProfile?.(
         mentorId,
         correlationId,
@@ -238,7 +238,10 @@ const createConnectRequestService = ({
     let sessionRate = requestBeforeUpdate.sessionRate;
     const sessionCount =
       requestBeforeUpdate.sessionCount || requestBeforeUpdate.selectedSlots?.length;
-    if (status === "accepted" && sessionRate == null) {
+    if (
+      status === "accepted" &&
+      (sessionRate === null || sessionRate === undefined)
+    ) {
       const profile = await profileClient?.getMentorProfile?.(
         mentorId,
         correlationId,
@@ -489,7 +492,7 @@ const createConnectRequestService = ({
       participantName(request.mentee, "Mentee", correlationId),
       participantName(mentorUserId, "Mentor", correlationId),
     ]);
-    const [mentee, mentor, referredMentor] = await Promise.all([
+    const [mentee, _mentor, referredMentor] = await Promise.all([
       identityClient
         ?.getUserSummaries?.([request.mentee], correlationId)
         .then((users) => users?.[0])

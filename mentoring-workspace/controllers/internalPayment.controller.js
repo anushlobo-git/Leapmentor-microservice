@@ -14,7 +14,10 @@ const createInternalPaymentController = ({
         });
       }
       let paymentContext = context;
-      if (paymentContext.sessionRate == null && paymentContext.mentor) {
+      if (
+        (paymentContext.sessionRate === null || paymentContext.sessionRate === undefined) &&
+        paymentContext.mentor
+      ) {
         const profile = await profileClient?.getMentorProfile?.(
           paymentContext.mentor,
           req.correlationId,

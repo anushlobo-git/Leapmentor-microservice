@@ -3,7 +3,7 @@ const { toMessageDTO } = require("../utils/message.mapper");
 const ROOM_ID = /^[0-9a-fA-F]{24}$/;
 const MAX_CONTENT_LENGTH = 5000;
 
-const createMessageSocketHandler = ({ io, messageService, messageRepository, connectRequestRepository, notificationClient = { publish: async () => null } }) => {
+const createMessageSocketHandler = ({ io, messageService: _messageService, messageRepository, connectRequestRepository, notificationClient = { publish: async () => null } }) => {
   const onlineUsers = new Map();
 
   const getRoomContext = async (connectRequestId, userId) => {
