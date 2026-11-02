@@ -29,8 +29,7 @@ const createFakes = ({ sendError = null, userExists = true } = {}) => {
       records.push(record);
       return record;
     },
-    findTokenByUserId: async (userId) =>
-      records.find((record) => record.user === userId) || null,
+    findTokenByUserId: async (userId) => records.find((record) => record.user === userId) || null,
     saveToken: async (record) => record,
   };
   const bcrypt = {
@@ -66,6 +65,10 @@ test("sends a password reset OTP and stores only its hash", async () => {
     expiresAt: new Date("2026-10-24T12:10:00.000Z"),
   });
   assert.match(fakes.sentEmails[0].text, /123456/);
+  assert.match(fakes.sentEmails[0].html, /Reset Your Password/);
+  assert.match(fakes.sentEmails[0].html, /linear-gradient\(135deg,#2563eb,#1d4ed8\)/);
+  assert.match(fakes.sentEmails[0].html, />123456</);
+  assert.match(fakes.sentEmails[0].html, /If you didn't request this/);
 });
 
 test("uses an ambiguous response for an unknown email", async () => {
@@ -86,7 +89,10 @@ test("verifies a reset OTP and extends the short reset session", async () => {
     message: "OTP verified",
     email: "user@example.com",
   });
-  assert.equal(fakes.records[0].expiresAt.getTime(), new Date("2026-10-24T12:05:00.000Z").getTime());
+  assert.equal(
+    fakes.records[0].expiresAt.getTime(),
+    new Date("2026-10-24T12:05:00.000Z").getTime(),
+  );
 });
 
 test("resets the password and consumes the reset record", async () => {

@@ -73,6 +73,10 @@ test("sends an OTP and magic link while storing only hashes", async () => {
   assert.equal(fakes.sentEmails[0].to, "user@example.com");
   assert.match(fakes.sentEmails[0].text, /123456/);
   assert.match(fakes.sentEmails[0].text, /plain-token/);
+  assert.match(fakes.sentEmails[0].html, /Verify your LeapMentor account/);
+  assert.match(fakes.sentEmails[0].html, /Option 1 — Magic Link/);
+  assert.match(fakes.sentEmails[0].html, /Option 2 — OTP/);
+  assert.match(fakes.sentEmails[0].html, /#4F46E5/);
   assert.equal(fakes.sentEmails[0].subject, "LeapMentor Email Verification - Registration");
 });
 

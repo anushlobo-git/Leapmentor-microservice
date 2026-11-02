@@ -13,5 +13,6 @@ data:
   NOTIFICATION_CONSUMER_GROUP: notifications-support
   NOTIFICATION_CONSUMER_NAME: notifications-support
   ADMIN_SERVICE_URL: http://admin-moderation:5006
+  APP_BASE_URL: http://192.168.49.2:30080
   GROQ_API_URL: https://api.groq.com/openai/v1/chat/completions
   GROQ_MODEL: llama-3.1-8b-instant

@@ -21,6 +21,7 @@ module.exports = {
   notificationConsumerGroup: getEnv("NOTIFICATION_CONSUMER_GROUP", "notifications-support"),
   notificationConsumerName: getEnv("NOTIFICATION_CONSUMER_NAME", `notifications-${process.pid}`),
   notificationEventsStreamName: getEnv("NOTIFICATION_EVENTS_STREAM_NAME", "leapmentor.notification.events"),
+  appBaseUrl: getEnv("APP_BASE_URL", "http://localhost:8080"),
   jwtAccessSecret: getEnv("JWT_ACCESS_SECRET", "development-access-secret"),
   workspaceServiceToken: getEnv("WORKSPACE_SERVICE_TOKEN", ""),
   groqApiKey: getEnv("GROQ_API_KEY", ""),

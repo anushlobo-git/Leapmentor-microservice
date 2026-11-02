@@ -50,7 +50,21 @@ const createVerificationService = ({
           `OTP: ${plainOtp}`,
           "Both expire in 10 minutes.",
         ].join("\n\n"),
-        html: `<p>Verify your LeapMentor account.</p><p><a href="${magicLink}">Verify my email</a></p><p>OTP: <strong>${plainOtp}</strong></p><p>Both expire in 10 minutes.</p>`,
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:auto">
+            <h2 style="color:#4F46E5">Verify your LeapMentor account</h2>
+            <p>Use either option — both expire in <strong>10 minutes</strong>.</p>
+            <h3>Option 1 — Magic Link</h3>
+            <a href="${magicLink}" style="display:inline-block;padding:12px 24px;background:#4F46E5;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">
+              Verify my email
+            </a>
+            <p style="font-size:12px;color:#6B7280">Or copy: ${magicLink}</p>
+            <hr style="margin:24px 0"/>
+            <h3>Option 2 — OTP</h3>
+            <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#111">${plainOtp}</p>
+            <p style="font-size:13px;color:#6B7280">Enter this on the verification screen.</p>
+          </div>
+        `,
       });
     } catch (error) {
       await verificationTokenRepository.deleteTokensByUserId(user._id);
