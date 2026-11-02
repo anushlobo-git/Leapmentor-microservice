@@ -183,6 +183,45 @@ test("engagement list filters through Workspace and decorates participant summar
   assert.deepEqual(result.pagination, { total: 1, page: 2, totalPages: 1 });
 });
 
+test("engagement history passes an exact mentee ID to Workspace", async () => {
+  let workspaceQuery;
+  const service = createDashboardService({
+    identityClient: {
+      getUser: async (userId) => ({
+        data: { user: { _id: userId, name: "Jane", email: "jane@example.com" } },
+      }),
+    },
+    profileClient: {},
+    workspaceClient: {
+      getEngagements: async (query) => {
+        workspaceQuery = query;
+        return {
+          data: {
+            engagements: [
+              {
+                _id: "engagement-1",
+                mentee: "mentee-1",
+                mentor: "mentor-1",
+              },
+            ],
+            pagination: { total: 1, page: 1, totalPages: 1 },
+          },
+        };
+      },
+    },
+    cache: createTtlCache(),
+  });
+
+  const result = await service.getEngagements(
+    { menteeId: "mentee-1", page: 1, limit: 50 },
+    "corr-history",
+  );
+
+  assert.equal(workspaceQuery.menteeId, "mentee-1");
+  assert.equal(workspaceQuery.userIds, undefined);
+  assert.equal(result.engagements[0].mentee._id, "mentee-1");
+});
+
 test("engagement route rejects invalid filters before calling the service", async () => {
   let serviceCalls = 0;
   const server = http.createServer(
@@ -223,6 +262,12 @@ test("engagement route rejects invalid filters before calling the service", asyn
       `http://127.0.0.1:${server.address().port}/api/v1/admin/engagements?dateFrom=2026-02-31`,
     );
     assert.equal(invalidDate.status, 400);
+    assert.equal(serviceCalls, 1);
+
+    const invalidMenteeId = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/v1/admin/engagements?menteeId=not-an-id`,
+    );
+    assert.equal(invalidMenteeId.status, 400);
     assert.equal(serviceCalls, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));

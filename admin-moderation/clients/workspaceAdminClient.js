@@ -32,6 +32,7 @@ const createWorkspaceAdminClient = ({ httpClient }) => ({
       "page",
       "limit",
       "userIds",
+      "menteeId",
     ]) {
       if (query[key] !== undefined && query[key] !== "") {
         params.set(key, String(query[key]));

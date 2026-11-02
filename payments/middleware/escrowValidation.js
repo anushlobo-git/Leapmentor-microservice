@@ -36,8 +36,36 @@ const requestIdValidation = (req, _res, next) => {
   return next();
 };
 
+const payAdditionalValidation = (req, _res, next) => {
+  const { connectRequestId, sessionRate, slotId, slot } = req.body || {};
+  if (!connectRequestId || !sessionRate || (!slotId && !slot)) {
+    return next(invalid("connectRequestId, sessionRate, and either slotId or slot are required"));
+  }
+  if (!OBJECT_ID.test(String(connectRequestId))) {
+    return next(invalid("connectRequestId must be a valid ObjectId"));
+  }
+  if (slotId && !OBJECT_ID.test(String(slotId))) {
+    return next(invalid("slotId must be a valid ObjectId"));
+  }
+  if (!Number.isInteger(Number(sessionRate)) || Number(sessionRate) < 1) {
+    return next(invalid("sessionRate must be a positive integer"));
+  }
+  if (
+    !slotId &&
+    (!slot.date ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(slot.date) ||
+      !slot.startTime ||
+      !/^([01]?\d|2[0-3]):[0-5]\d$/.test(slot.startTime) ||
+      !slot.endTime ||
+      !/^([01]?\d|2[0-3]):[0-5]\d$/.test(slot.endTime))
+  ) {
+    return next(invalid("slot must include a valid date, startTime, and endTime"));
+  }
+  return next();
+};
+
 module.exports = {
   payValidation: bodyValidation(["connectRequestId", "sessionRate", "sessionCount"]),
-  payAdditionalValidation: bodyValidation(["connectRequestId", "sessionRate", "slotId"]),
+  payAdditionalValidation,
   requestIdValidation,
 };

@@ -71,6 +71,15 @@ const createWorkspaceClient = ({ httpClient }) => ({
     });
     return response.data;
   },
+  createAdditionalSlot: async (requestId, slot, menteeId, correlationId) => {
+    const response = await httpClient.request({
+      method: "POST",
+      path: `/internal/v1/connect-requests/${encodeURIComponent(requestId)}/additional-slots`,
+      body: { ...slot, userId: menteeId },
+      correlationId,
+    });
+    return response.data;
+  },
   updatePaymentState: async (requestId, state, correlationId) => {
     const response = await httpClient.request({
       method: "PATCH",

@@ -81,6 +81,13 @@ test("reschedule blocker mode returns only original request slots", async () => 
               startTime: "09:00",
               endTime: "10:00",
               status: "cancelled",
+              paymentStatus: "pending",
+            },
+            {
+              date: "2099-01-05",
+              startTime: "09:00",
+              endTime: "10:00",
+              paymentStatus: "paid",
             },
           ],
         };
@@ -121,7 +128,7 @@ test("reschedule blocker mode returns only original request slots", async () => 
   assert.deepEqual(response.body.data, {
     bookedSlots: [
       { date: "2099-01-02", startTime: "09:00", endTime: "10:00" },
-      { date: "2099-01-04", startTime: "09:00", endTime: "10:00" },
+      { date: "2099-01-05", startTime: "09:00", endTime: "10:00" },
     ],
     lockedSlots: [],
   });

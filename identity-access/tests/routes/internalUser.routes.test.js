@@ -93,3 +93,60 @@ test("internal user search returns identity-owned summaries for a name query", a
     await new Promise((resolve) => serverDetails.server.close(resolve));
   }
 });
+
+test("internal user search accepts the admin service token for batched IDs", async () => {
+  const controller = createInternalUserController({
+    userRepository: {
+      findUserById: async () => null,
+      findUsersByIds: async (ids) =>
+        ids.map((id) => ({
+          _id: id,
+          name: `User ${id}`,
+          email: `${id}@example.com`,
+        })),
+    },
+    userService: {
+      getCurrentUser: (user) => ({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+      }),
+    },
+  });
+  const serviceToken = "admin-token";
+  const serverDetails = await startServer({
+    health: { isReady: () => true },
+    internalServiceAuth: createInternalServiceAuth({
+      serviceTokens: ["profile-token", serviceToken],
+      routeScopes: {
+        "/internal/v1/users": ["profile-token", serviceToken],
+      },
+    }),
+    internalUserRouter: createInternalUserRouter({
+      internalUserController: controller,
+    }),
+  });
+
+  try {
+    const response = await fetch(
+      `${serverDetails.url}/internal/v1/users?ids=user-1%2Cuser-2`,
+      { headers: { Authorization: `Bearer ${serviceToken}` } },
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).data.users, [
+      {
+        _id: "user-1",
+        name: "User user-1",
+        email: "user-1@example.com",
+      },
+      {
+        _id: "user-2",
+        name: "User user-2",
+        email: "user-2@example.com",
+      },
+    ]);
+  } finally {
+    await new Promise((resolve) => serverDetails.server.close(resolve));
+  }
+});

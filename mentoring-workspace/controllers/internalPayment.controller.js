@@ -1,6 +1,7 @@
 const createInternalPaymentController = ({
   connectRequestPaymentRepository,
   profileClient,
+  sessionService,
 }) => {
   const getPaymentContext = async (req, res, next) => {
     try {
@@ -66,7 +67,24 @@ const createInternalPaymentController = ({
     }
   };
 
-  return { getPaymentContext, updatePaymentState };
+  const createAdditionalSlot = async (req, res, next) => {
+    try {
+      const slot = await sessionService.addSlot({
+        connectRequestId: req.params.id,
+        ...req.body,
+        correlationId: req.correlationId,
+      });
+      return res.status(201).json({
+        success: true,
+        data: slot,
+        message: "Additional session slot created for payment",
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  return { getPaymentContext, updatePaymentState, createAdditionalSlot };
 };
 
 module.exports = createInternalPaymentController;

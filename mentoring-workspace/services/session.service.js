@@ -1,5 +1,15 @@
 const AppError = require("../utils/AppError");
 
+const DAYS_OF_WEEK = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
 const ALLOWED_MEETING_HOSTS = [
   "meet.google.com",
   "zoom.us",
@@ -301,50 +311,78 @@ const createSessionService = ({
     if (!request)
       throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
     assertParticipant(request, userId);
+    if (String(request.mentee) !== String(userId))
+      throw new AppError(
+        "The mentee must complete payment to book an additional session",
+        403,
+        "MENTEE_PAYMENT_REQUIRED",
+      );
     assertOngoing(request);
     const allSlots = [
       ...(request.selectedSlots || []),
       ...(request.additionalSlots || []),
     ];
-    if (
-      allSlots.some(
-        (slot) =>
-          slot.status !== "cancelled" &&
-          slot.date === date &&
-          slot.startTime === startTime &&
-          slot.endTime === endTime,
-      )
-    )
+    const matchesSlot = (slot) =>
+      slot.status !== "cancelled" &&
+      slot.date === date &&
+      slot.startTime === startTime &&
+      slot.endTime === endTime;
+    const pendingSlot = (request.additionalSlots || []).find(
+      (slot) => matchesSlot(slot) && slot.paymentStatus !== "paid",
+    );
+    if (pendingSlot) {
+      const { activeSlots, completedSlots, progress } = stats(
+        request.selectedSlots || [],
+      );
+      return {
+        slot: pendingSlot,
+        slotId: pendingSlot._id,
+        slots: request.selectedSlots || [],
+        additionalSlots: request.additionalSlots,
+        totalSlots: activeSlots.length,
+        completedSlots,
+        progress,
+      };
+    }
+    if (allSlots.some(matchesSlot))
       throw new AppError("This slot already exists", 409, "SLOT_EXISTS");
+    const day = DAYS_OF_WEEK[new Date(`${date}T00:00:00Z`).getUTCDay()];
     const slot = {
+      day,
       date,
       startTime,
       endTime,
+      meetingLink: "",
       paymentStatus: "pending",
       menteeMarked: false,
       mentorMarked: false,
+      completedAt: null,
     };
     request.additionalSlots = request.additionalSlots || [];
     request.additionalSlots.push(slot);
     await sessionRepository.save(request);
-    await queueSessionEmail(
-      request,
-      {
-        eventType: "session.additional-slot.email",
-        sourceEventId: `workspace.session:${connectRequestId}:additional:${date}:${startTime}:email`,
-        connectRequestId,
-        slot,
-      },
-      correlationId,
+    const { activeSlots, completedSlots, progress } = stats(
+      request.selectedSlots || [],
     );
     publishSlotUpdate(request, {
-      requestId: connectRequestId,
-      additionalSlot: slot,
-      type: "added",
-    });
-    return {
-      slot: request.additionalSlots.at(-1),
+      connectRequestId,
+      slots: request.selectedSlots || [],
+      pendingAdditionalSlot: slot,
       additionalSlots: request.additionalSlots,
+      totalSlots: activeSlots.length,
+      completedSlots,
+      progress,
+      type: "pending_payment",
+    });
+    const savedSlot = request.additionalSlots.at(-1);
+    return {
+      slot: savedSlot,
+      slotId: savedSlot._id,
+      slots: request.selectedSlots || [],
+      additionalSlots: request.additionalSlots,
+      totalSlots: activeSlots.length,
+      completedSlots,
+      progress,
     };
   };
 

@@ -165,13 +165,6 @@ const profileHttpClient = createInternalHttpClient({
   timeoutMs: env.internalRequestTimeoutMs,
 });
 const profileClient = createProfileClient({ httpClient: profileHttpClient });
-const internalPaymentController = createInternalPaymentController({
-  connectRequestPaymentRepository,
-  profileClient,
-});
-const internalPaymentRouter = createInternalPaymentRouter({
-  internalPaymentController,
-});
 const paymentsHttpClient = createInternalHttpClient({
   baseUrl: env.paymentsServiceUrl,
   serviceToken: env.paymentsServiceToken,
@@ -230,6 +223,14 @@ const sessionService = createSessionService({
   paymentsClient,
   identityClient,
   realtimePublisher,
+});
+const internalPaymentController = createInternalPaymentController({
+  connectRequestPaymentRepository,
+  profileClient,
+  sessionService,
+});
+const internalPaymentRouter = createInternalPaymentRouter({
+  internalPaymentController,
 });
 const sessionController = createSessionController({ sessionService });
 const sessionRouter = createSessionRouter({

@@ -1,30 +1,52 @@
 const createLeapRequestsService = ({ paymentsClient, identityClient }) => {
+  const getMenteeId = (mentee) => {
+    const value = mentee?._id ?? mentee?.id ?? mentee;
+    if (typeof value === "string" || typeof value === "number") {
+      return String(value);
+    }
+    if (value && typeof value.toString === "function") {
+      const id = value.toString();
+      return id === "[object Object]" ? "" : id;
+    }
+    return "";
+  };
+
   const getRequests = async (status, correlationId) => {
     const response = await paymentsClient.listLeapRequests(
       status,
       correlationId,
     );
     const requests = response?.data?.requests || [];
-    const decorated = await Promise.all(
-      requests.map(async (request) => {
-        const menteeId = request.mentee;
-        if (!menteeId) return request;
-        try {
-          const userResponse = await identityClient.getUser(
-            menteeId,
-            correlationId,
-          );
-          const user = userResponse?.data?.user || null;
-          return {
-            ...request,
-            mentee: user ? { ...user, _id: user._id || menteeId } : menteeId,
-          };
-        } catch {
-          return request;
-        }
-      }),
+    const menteeIds = [
+      ...new Set(
+        requests
+          .map((request) => getMenteeId(request.mentee))
+          .filter(Boolean)
+      ),
+    ];
+    const users = await identityClient.getUserSummaries(
+      menteeIds,
+      correlationId,
     );
-    return decorated;
+    const usersById = new Map(users.map((user) => [String(user._id), user]));
+
+    return requests.map((request) => {
+      const menteeId = getMenteeId(request.mentee);
+      const user = usersById.get(menteeId);
+      const existingMentee =
+        request.mentee && typeof request.mentee === "object"
+          ? request.mentee
+          : {};
+      return {
+        ...request,
+        mentee: user || {
+          ...existingMentee,
+          ...(menteeId ? { _id: menteeId } : {}),
+          name: existingMentee.name || "Unavailable user",
+          email: existingMentee.email || "",
+        },
+      };
+    });
   };
 
   return {

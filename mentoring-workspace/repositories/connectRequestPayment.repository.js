@@ -41,9 +41,16 @@ const createConnectRequestPaymentRepository = (ConnectRequest) => {
           update[`additionalSlots.$.${field}`] = state[field];
         }
       }
+      const updateOperators = { $set: update };
+      if (state.paymentStatus === "paid") {
+        if (!state.selectedSlot) {
+          throw new Error("A paid additional slot must include its booked slot data");
+        }
+        updateOperators.$addToSet = { selectedSlots: state.selectedSlot };
+      }
       return ConnectRequest.findOneAndUpdate(
         { _id: requestId, "additionalSlots._id": state.additionalSlotId },
-        { $set: update },
+        updateOperators,
         { new: true, runValidators: true },
       ).lean();
     }

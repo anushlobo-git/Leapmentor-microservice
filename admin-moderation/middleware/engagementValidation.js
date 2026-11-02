@@ -22,7 +22,7 @@ const isValidDate = (value) => {
 };
 
 const validateEngagementQuery = (req, _res, next) => {
-  const { status, search, dateFrom, dateTo, page, limit } = req.query;
+  const { status, search, dateFrom, dateTo, page, limit, menteeId } = req.query;
   const pageNumber = Number(page || 1);
   const limitNumber = Number(limit || 15);
   if (status && !ALLOWED_STATUSES.has(status)) {
@@ -38,6 +38,18 @@ const validateEngagementQuery = (req, _res, next) => {
     return next(
       new AppError(
         "Invalid engagement search",
+        400,
+        "INVALID_ENGAGEMENT_QUERY",
+      ),
+    );
+  }
+  if (
+    menteeId !== undefined &&
+    (typeof menteeId !== "string" || !/^[a-f\d]{24}$/i.test(menteeId))
+  ) {
+    return next(
+      new AppError(
+        "Invalid engagement mentee ID",
         400,
         "INVALID_ENGAGEMENT_QUERY",
       ),

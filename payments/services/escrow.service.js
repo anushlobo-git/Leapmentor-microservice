@@ -236,12 +236,13 @@ const createEscrowService = ({
     connectRequestId,
     sessionRate,
     slotId,
+    slot,
     menteeId,
     correlationId,
   }) => {
-    if (!connectRequestId || !slotId)
+    if (!connectRequestId || (!slotId && !slot))
       throw new AppError(
-        "connectRequestId, sessionRate, and slotId are required",
+        "connectRequestId, sessionRate, and slot data are required",
         400,
       );
     const rate = requireAmount(sessionRate, "sessionRate");
@@ -253,9 +254,33 @@ const createEscrowService = ({
         "Additional payment only allowed on ongoing sessions",
         400,
       );
+    let additionalSlotId = slotId;
+    if (!additionalSlotId) {
+      if (typeof workspaceClient.createAdditionalSlot !== "function") {
+        throw new AppError(
+          "Workspace cannot create an additional slot for payment",
+          503,
+          "WORKSPACE_SLOT_CREATION_UNAVAILABLE",
+        );
+      }
+      const created = await workspaceClient.createAdditionalSlot(
+        connectRequestId,
+        slot,
+        menteeId,
+        correlationId,
+      );
+      additionalSlotId = created?.slotId || created?.slot?._id;
+      if (!additionalSlotId) {
+        throw new AppError(
+          "Workspace did not return the additional slot ID",
+          502,
+          "WORKSPACE_SLOT_CREATION_FAILED",
+        );
+      }
+    }
     const additionalSlot = (context.additionalSlots || []).find(
-      (slot) => idOf(slot) === idOf(slotId),
-    );
+      (item) => idOf(item) === idOf(additionalSlotId),
+    ) || (slot && { ...slot, _id: additionalSlotId, paymentStatus: "pending" });
     if (!additionalSlot) throw new AppError("Additional slot not found", 404);
     if (additionalSlot.paymentStatus === "paid")
       throw new AppError("This slot has already been paid for", 409);
@@ -295,11 +320,22 @@ const createEscrowService = ({
     await workspaceClient.updatePaymentState(
       connectRequestId,
       {
-        additionalSlotId: slotId,
+        additionalSlotId,
         paymentStatus: "paid",
         paidAt: new Date(),
         sessionRate: rate,
         totalAmount,
+        selectedSlot: {
+          day: additionalSlot.day || "",
+          date: additionalSlot.date,
+          startTime: additionalSlot.startTime,
+          endTime: additionalSlot.endTime,
+          meetingLink: additionalSlot.meetingLink || "",
+          menteeMarked: false,
+          mentorMarked: false,
+          completedAt: null,
+          status: "booked",
+        },
       },
       correlationId,
     );
@@ -308,7 +344,7 @@ const createEscrowService = ({
       platformFee: fee,
       totalAmount,
       commissionRate: activeCommissionRate,
-      slotId,
+      slotId: additionalSlotId,
       ...local,
     };
   };
@@ -553,6 +589,7 @@ const createEscrowService = ({
   const getStatus = async ({ requestId, userId, correlationId }) => {
     const context = await getContext(requestId, correlationId);
     requireParticipant(context, userId);
+    const activeCommissionRate = await getCommissionRate();
     const wallet = await walletRepository.findByUserIdAndRole(
       context.mentee,
       ROLE_MENTEE,
@@ -567,7 +604,7 @@ const createEscrowService = ({
       paidAt: context.paidAt,
       completedAt: context.completedAt,
       confirmedSlot: context.confirmedSlot,
-      commissionRate: context.commissionRate ?? (await getCommissionRate()),
+      commissionRate: activeCommissionRate,
       wallet: wallet
         ? { balance: wallet.balance, escrow: wallet.escrow }
         : null,

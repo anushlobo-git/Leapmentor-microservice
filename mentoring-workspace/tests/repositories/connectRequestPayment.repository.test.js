@@ -48,12 +48,43 @@ test("updates only payment-owned fields and supports additional-slot state", asy
     privateMessage: "must-not-update",
     additionalSlotId: "slot-1",
     sessionRate: 100,
+    selectedSlot: {
+      date: "2099-01-01",
+      startTime: "10:00",
+      endTime: "11:00",
+      status: "booked",
+    },
   });
 
   assert.deepEqual(calls[0], [
     "slot",
     { _id: "request-1", "additionalSlots._id": "slot-1" },
-    { $set: { "additionalSlots.$.paymentStatus": "paid", "additionalSlots.$.sessionRate": 100 } },
+    {
+      $set: {
+        "additionalSlots.$.paymentStatus": "paid",
+        "additionalSlots.$.sessionRate": 100,
+      },
+      $addToSet: {
+        selectedSlots: {
+          date: "2099-01-01",
+          startTime: "10:00",
+          endTime: "11:00",
+          status: "booked",
+        },
+      },
+    },
     { new: true, runValidators: true },
   ]);
+});
+
+test("does not mark an additional slot paid without adding its booked session", () => {
+  const repository = createConnectRequestPaymentRepository({});
+  assert.throws(
+    () =>
+      repository.updatePaymentState("request-1", {
+        additionalSlotId: "slot-1",
+        paymentStatus: "paid",
+      }),
+    /must include its booked slot data/,
+  );
 });

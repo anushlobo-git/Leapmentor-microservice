@@ -14,6 +14,7 @@ const startServer = async (container) => {
 };
 
 test("Workspace payment context route requires the Payments service token", async () => {
+  const createdSlots = [];
   const controller = createInternalPaymentController({
     connectRequestPaymentRepository: {
       findPaymentContext: async () => ({
@@ -28,6 +29,12 @@ test("Workspace payment context route requires the Payments service token", asyn
     },
     profileClient: {
       getMentorProfile: async () => ({ hourlyRate: 125 }),
+    },
+    sessionService: {
+      addSlot: async (slot) => {
+        createdSlots.push(slot);
+        return { slotId: "slot-2", slot: slot };
+      },
     },
   });
   const serverDetails = await startServer({
@@ -50,6 +57,35 @@ test("Workspace payment context route requires the Payments service token", asyn
     const body = await response.json();
     assert.equal(body.data.sessionRate, 125);
     assert.equal(body.data.totalAmount, 125);
+
+    const createUnauthorized = await fetch(
+      `${serverDetails.url}/internal/v1/connect-requests/request-1/additional-slots`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    );
+    assert.equal(createUnauthorized.status, 401);
+
+    const createResponse = await fetch(
+      `${serverDetails.url}/internal/v1/connect-requests/request-1/additional-slots`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "******",
+          "Content-Type": "application/json",
+          ...{ Authorization: "Bearer payments-token" },
+        },
+        body: JSON.stringify({
+          userId: "mentee-1",
+          day: "Monday",
+          date: "2099-01-03",
+          startTime: "14:00",
+          endTime: "15:00",
+        }),
+      },
+    );
+    const createBody = await createResponse.json();
+    assert.equal(createResponse.status, 201, JSON.stringify(createBody));
+    assert.equal(createdSlots[0].connectRequestId, "request-1");
+    assert.equal(createdSlots[0].userId, "mentee-1");
   } finally {
     await new Promise((resolve) => serverDetails.server.close(resolve));
   }

@@ -23,7 +23,10 @@ test("escrow payment route authenticates the browser and preserves the payment p
         calls.push(input);
         return { paymentStatus: "paid" };
       },
-      payAdditional: async () => ({}),
+      payAdditional: async (input) => {
+        calls.push(input);
+        return { paymentStatus: "paid" };
+      },
       release: async () => ({}),
       refund: async () => ({}),
       getStatus: async () => ({}),
@@ -58,6 +61,30 @@ test("escrow payment route authenticates the browser and preserves the payment p
     assert.equal(response.status, 200);
     assert.equal(calls[0].menteeId, "mentee-1");
     assert.equal(calls[0].sessionRate, 100);
+
+    const additionalResponse = await fetch(
+      `${serverDetails.url}/api/v1/escrow/pay-additional`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          connectRequestId: "507f1f77bcf86cd799439011",
+          sessionRate: 100,
+          slot: {
+            day: "Monday",
+            date: "2099-01-03",
+            startTime: "14:00",
+            endTime: "15:00",
+          },
+        }),
+      },
+    );
+    assert.equal(additionalResponse.status, 200);
+    assert.equal(calls[1].menteeId, "mentee-1");
+    assert.equal(calls[1].slot.date, "2099-01-03");
   } finally {
     await new Promise((resolve) => serverDetails.server.close(resolve));
   }

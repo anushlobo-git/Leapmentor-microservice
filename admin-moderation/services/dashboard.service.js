@@ -59,7 +59,7 @@ const createDashboardService = ({
         ...query,
         userIds: query.search?.trim()
           ? matchingUsers.map((user) => String(user._id)).join(",")
-          : undefined,
+          : query.userIds,
       },
       correlationId,
     );

@@ -64,6 +64,7 @@ const createInternalAdminStatsController = ({ connectRequestRepository }) => {
         dateFrom,
         dateTo,
         userIds: rawUserIds,
+        menteeId,
         page = 1,
         limit = 15,
       } = req.query;
@@ -75,6 +76,7 @@ const createInternalAdminStatsController = ({ connectRequestRepository }) => {
       const filter = {};
 
       if (status) filter.status = status;
+      if (menteeId) filter.mentee = String(menteeId);
       if (dateFrom || dateTo) {
         filter.requestedAt = {};
         if (dateFrom) filter.requestedAt.$gte = new Date(dateFrom);

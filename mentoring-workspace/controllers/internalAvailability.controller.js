@@ -16,7 +16,9 @@ const createInternalAvailabilityController = ({
           (request?.selectedSlot ? [request.selectedSlot] : []);
         const bookedSlots = [
           ...selectedSlots.filter((slot) => slot.status !== "cancelled"),
-          ...(request?.additionalSlots || []),
+          ...(request?.additionalSlots || []).filter(
+            (slot) => slot.paymentStatus === "paid",
+          ),
         ].map(({ date, startTime, endTime }) => ({ date, startTime, endTime }));
         return res.status(200).json({
           success: true,

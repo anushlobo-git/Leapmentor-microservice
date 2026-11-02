@@ -138,9 +138,17 @@ const internalAdminUserRouter = createInternalAdminUserRouter({
   controller: internalAdminUserController,
 });
 const internalServiceAuth = createInternalServiceAuth({
-  serviceTokens: [env.profileServiceToken, env.workspaceServiceToken],
+  serviceTokens: [
+    env.profileServiceToken,
+    env.workspaceServiceToken,
+    env.adminServiceToken,
+  ],
   routeScopes: {
-    "/internal/v1/users": [env.profileServiceToken, env.workspaceServiceToken],
+    "/internal/v1/users": [
+      env.profileServiceToken,
+      env.workspaceServiceToken,
+      env.adminServiceToken,
+    ],
   },
 });
 const internalAdminServiceAuth = createInternalServiceAuth({
