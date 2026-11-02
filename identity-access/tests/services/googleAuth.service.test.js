@@ -74,3 +74,36 @@ test("does not attempt verification when Google is not configured", async () => 
     { statusCode: 503, code: "GOOGLE_NOT_CONFIGURED" },
   );
 });
+
+test("rejects incomplete Google profiles and defaults a missing name", async () => {
+  const invalidProfile = createGoogleAuthService({
+    clientId: "google-client-id",
+    googleClient: {
+      verifyIdToken: async () => ({ getPayload: () => ({ email: "user@example.com" }) }),
+    },
+    federatedAuthService: {},
+  });
+  await assert.rejects(
+    invalidProfile.googleAuthUser({ credential: "credential" }),
+    { statusCode: 400, code: "GOOGLE_PROFILE_INVALID" },
+  );
+
+  let federatedProfile;
+  const service = createGoogleAuthService({
+    clientId: "google-client-id",
+    googleClient: {
+      verifyIdToken: async () => ({
+        getPayload: () => ({ sub: "google-sub", email: "user@example.com" }),
+      }),
+    },
+    federatedAuthService: {
+      authenticateFederatedUser: async (profile) => {
+        federatedProfile = profile;
+        return {};
+      },
+    },
+  });
+  await service.googleAuthUser({ credential: "credential" });
+  assert.equal(federatedProfile.name, "User");
+  assert.equal(federatedProfile.emailVerified, undefined);
+});

@@ -2,8 +2,8 @@ const http = require("node:http");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const createApp = require("../app");
-const createLeapRequestsRouter = require("../routes/leapRequests.routes");
+const createApp = require("../../app");
+const createLeapRequestsRouter = require("../../routes/leapRequests.routes");
 
 test("preserves the admin UI Leap Request route paths behind authentication", async () => {
   const authenticate = (req, _res, next) => {

@@ -135,3 +135,77 @@ test("does not leave a token when email delivery is unavailable", async () => {
   );
   assert.equal(fakes.tokenRecords.length, 0);
 });
+
+test("verification initiation rejects missing email, unknown users, and already verified accounts", async () => {
+  const fakes = createFakes();
+  await assert.rejects(
+    fakes.service.initiateVerification(""),
+    (error) => error.code === "INVALID_EMAIL",
+  );
+
+  fakes.user.isEmailVerified = true;
+  await assert.rejects(
+    fakes.service.initiateVerification("user@example.com"),
+    (error) => error.code === "EMAIL_ALREADY_VERIFIED",
+  );
+
+  const unknown = createFakes();
+  unknown.service = createVerificationService({
+    userRepository: { findUserByEmail: async () => null },
+    verificationTokenRepository: {},
+    bcrypt: {},
+    sendEmail: async () => {},
+    appBaseUrl: "https://app.example.com",
+    fromEmail: "noreply@example.com",
+  });
+  await assert.rejects(
+    unknown.service.initiateVerification("unknown@example.com"),
+    (error) => error.code === "USER_NOT_FOUND",
+  );
+});
+
+test("verification operations reject missing tokens, missing requests, and incorrect values", async () => {
+  const fakes = createFakes();
+  await assert.rejects(
+    fakes.service.processOtpVerification("", "123456"),
+    (error) => error.code === "INVALID_VERIFICATION_INPUT",
+  );
+  await assert.rejects(
+    fakes.service.processLinkVerification("token", ""),
+    (error) => error.code === "INVALID_VERIFICATION_INPUT",
+  );
+
+  fakes.tokenRecords.length = 0;
+  await assert.rejects(
+    fakes.service.processOtpVerification("user@example.com", "123456"),
+    (error) => error.code === "VERIFICATION_NOT_FOUND",
+  );
+
+  await fakes.service.initiateVerification("user@example.com");
+  await assert.rejects(
+    fakes.service.processOtpVerification("user@example.com", "000000"),
+    (error) => error.code === "INVALID_VERIFICATION_CODE",
+  );
+  await assert.rejects(
+    fakes.service.processLinkVerification("wrong-token", "user@example.com"),
+    (error) => error.code === "INVALID_VERIFICATION_CODE",
+  );
+});
+
+test("magic-link verification chooses a supported role and handles users without roles", async () => {
+  const mentee = createFakes();
+  mentee.user.roles = ["other", "mentee", "mentor"];
+  await mentee.service.initiateVerification("user@example.com");
+  assert.deepEqual(
+    await mentee.service.processLinkVerification("plain-token", "user@example.com"),
+    { role: "mentor" },
+  );
+
+  const roleless = createFakes();
+  roleless.user.roles = [];
+  await roleless.service.initiateVerification("user@example.com");
+  assert.deepEqual(
+    await roleless.service.processLinkVerification("plain-token", "user@example.com"),
+    { role: null },
+  );
+});

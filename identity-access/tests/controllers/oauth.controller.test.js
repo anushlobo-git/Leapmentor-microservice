@@ -105,3 +105,135 @@ test("LinkedIn redirect signs state and sends the browser to LinkedIn", () => {
   assert.match(res.location, /client_id=linkedin-client/);
   assert.match(res.location, /state=signed-mentor/);
 });
+
+test("OAuth controller handles Google, generic social, and LinkedIn token success and failures", async () => {
+  const calls = [];
+  const warnings = [];
+  const controller = createOAuthController({
+    googleAuthService: {
+      googleAuthUser: async () => { throw new Error("Google unavailable"); },
+    },
+    federatedAuthService: {
+      socialAuthUser: async (body, options) => {
+        calls.push(["social", body, options]);
+        if (body.provider === "custom") throw new Error("social failure");
+        return { accessToken: "social-access", refreshToken: "social-refresh", user: { _id: "social" } };
+      },
+    },
+    linkedinAuthService: {
+      exchangeLinkedinCode: async (body, options) => {
+        if (!body.code) throw new Error("LinkedIn unavailable");
+        calls.push(["linkedin", body, options]);
+        return { accessToken: "linkedin-access", refreshToken: "linkedin-refresh", user: { _id: "linkedin" } };
+      },
+    },
+    cookieService: { setRefreshCookie: (res, token) => { res.cookie = token; } },
+    oauthStateService: {},
+    clientId: "client",
+    callbackUrl: "callback",
+    clientUrl: "http://localhost",
+    logger: { warn: (...args) => warnings.push(args) },
+  });
+
+  const socialRes = createResponse();
+  await controller.social(
+    { body: { provider: "apple" }, correlationId: "corr-social" },
+    socialRes,
+    assert.fail,
+  );
+  assert.equal(socialRes.body.message, "Social login successful");
+  assert.equal(socialRes.cookie, "social-refresh");
+  const linkedinRes = createResponse();
+  await controller.linkedinToken(
+    { body: { code: "code" }, correlationId: "corr-linkedin" },
+    linkedinRes,
+    assert.fail,
+  );
+  assert.equal(linkedinRes.body.message, "LinkedIn login successful");
+  assert.equal(linkedinRes.cookie, "linkedin-refresh");
+  assert.deepEqual(calls, [
+    ["social", { provider: "apple" }, { correlationId: "corr-social" }],
+    ["linkedin", { code: "code" }, { correlationId: "corr-linkedin" }],
+  ]);
+
+  let googleError;
+  await controller.google({ body: {}, correlationId: "corr-error" }, createResponse(), (error) => {
+    googleError = error;
+  });
+  assert.match(googleError.message, /Google unavailable/);
+
+  let socialError;
+  await controller.social(
+    { body: { provider: "custom" } },
+    createResponse(),
+    (error) => { socialError = error; },
+  );
+  assert.match(socialError.message, /social failure/);
+  assert.equal(warnings[0][0], "Generic social authentication failed");
+
+  let linkedinError;
+  await controller.linkedinToken(
+    { body: {} },
+    createResponse(),
+    (error) => { linkedinError = error; },
+  );
+  assert.match(linkedinError.message, /LinkedIn unavailable/);
+});
+
+test("LinkedIn redirect and callback handle configuration, provider errors, and successful state", () => {
+  const unconfigured = createOAuthController({
+    googleAuthService: {},
+    federatedAuthService: {},
+    linkedinAuthService: {},
+    cookieService: {},
+    oauthStateService: {},
+    clientId: "",
+    callbackUrl: "callback",
+    clientUrl: "http://localhost/",
+  });
+  const unavailableRes = createResponse();
+  unconfigured.linkedinRedirect({ query: {} }, unavailableRes);
+  assert.equal(unavailableRes.statusCode, 503);
+  assert.equal(unavailableRes.body.code, "LINKEDIN_NOT_CONFIGURED");
+
+  const controller = createOAuthController({
+    googleAuthService: {},
+    federatedAuthService: {},
+    linkedinAuthService: {},
+    cookieService: {},
+    oauthStateService: {
+      signState: (payload) => JSON.stringify(payload),
+      verifyState: (state) => {
+        if (state !== "valid") throw new Error("invalid state");
+      },
+    },
+    clientId: "client",
+    callbackUrl: "callback",
+    clientUrl: "http://localhost/",
+  });
+  const providerErrorRes = createResponse();
+  controller.linkedinCallback(
+    { query: { error: "access_denied" } },
+    providerErrorRes,
+  );
+  assert.equal(providerErrorRes.location, "http://localhost/?linkedin=failure");
+
+  const missingCodeRes = createResponse();
+  controller.linkedinCallback({ query: {} }, missingCodeRes);
+  assert.equal(missingCodeRes.location, "http://localhost/?linkedin=failure");
+
+  const successRes = createResponse();
+  controller.linkedinCallback(
+    { query: { code: "auth code", state: "valid" } },
+    successRes,
+  );
+  assert.match(successRes.location, /\/sso-callback\?code=auth\+code/);
+  assert.match(successRes.location, /provider=linkedin/);
+
+  const redirectRes = createResponse();
+  controller.linkedinRedirect(
+    { query: { role: "mentee", termsAccepted: "false" } },
+    redirectRes,
+  );
+  assert.match(redirectRes.location, /termsAccepted%22%3Afalse/);
+});

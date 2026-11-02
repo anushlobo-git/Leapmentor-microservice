@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const jwt = require("jsonwebtoken");
 
-const createAdminAuthService = require("../services/auth.service");
+const createAdminAuthService = require("../../services/auth.service");
 
 const ACCESS_SECRET = "admin-access-test-secret";
 const REFRESH_SECRET = "admin-refresh-test-secret";
@@ -63,6 +63,73 @@ test("admin login rejects an inactive administrator before password verification
 
   await assert.rejects(
     service.adminLogin({ email: admin.email, password: "password123" }),
+    (error) => error.statusCode === 403 && error.code === "ADMIN_INACTIVE",
+  );
+});
+
+test("admin login rejects unknown administrators and incorrect passwords", async () => {
+  const { admin, repository, service } = createFixture();
+  repository.findAdminByEmail = async () => null;
+  await assert.rejects(
+    service.adminLogin({ email: "missing@example.com", password: "password123" }),
+    (error) => error.statusCode === 401 && error.code === "INVALID_CREDENTIALS",
+  );
+
+  repository.findAdminByEmail = async () => admin;
+  await assert.rejects(
+    service.adminLogin({ email: admin.email, password: "incorrect" }),
+    (error) => error.statusCode === 401 && error.code === "INVALID_CREDENTIALS",
+  );
+});
+
+test("refresh issues a paired token set for an active session", async () => {
+  const { admin, service } = createFixture();
+  const refreshToken = jwt.sign(
+    { id: admin._id, role: "admin", type: "refresh", tokenVersion: 0 },
+    REFRESH_SECRET,
+  );
+
+  const result = await service.refreshAdminToken(refreshToken);
+
+  assert.equal(jwt.verify(result.accessToken, ACCESS_SECRET).type, "access");
+  assert.equal(jwt.verify(result.refreshToken, REFRESH_SECRET).type, "refresh");
+  assert.equal(jwt.verify(result.accessToken, ACCESS_SECRET).id, admin._id);
+});
+
+test("refresh rejects missing, invalid, wrongly typed, missing-admin, and inactive sessions", async () => {
+  const { admin, repository, service } = createFixture();
+
+  await assert.rejects(
+    service.refreshAdminToken(),
+    (error) => error.statusCode === 401 && error.code === "MISSING_REFRESH_TOKEN",
+  );
+  await assert.rejects(
+    service.refreshAdminToken("not-a-token"),
+    (error) => error.statusCode === 401 && error.code === "INVALID_REFRESH_TOKEN",
+  );
+
+  const wrongTypeToken = jwt.sign(
+    { id: admin._id, role: "admin", type: "access", tokenVersion: 0 },
+    REFRESH_SECRET,
+  );
+  await assert.rejects(
+    service.refreshAdminToken(wrongTypeToken),
+    (error) => error.statusCode === 403 && error.code === "INVALID_REFRESH_TOKEN",
+  );
+
+  const refreshToken = jwt.sign(
+    { id: admin._id, role: "admin", type: "refresh", tokenVersion: 0 },
+    REFRESH_SECRET,
+  );
+  repository.findAdminByIdFull = async () => null;
+  await assert.rejects(
+    service.refreshAdminToken(refreshToken),
+    (error) => error.statusCode === 401 && error.code === "ADMIN_NOT_FOUND",
+  );
+
+  repository.findAdminByIdFull = async () => ({ ...admin, isActive: false });
+  await assert.rejects(
+    service.refreshAdminToken(refreshToken),
     (error) => error.statusCode === 403 && error.code === "ADMIN_INACTIVE",
   );
 });

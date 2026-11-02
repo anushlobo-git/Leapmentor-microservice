@@ -190,3 +190,106 @@ test("rejects unsupported generic providers", async () => {
     { statusCode: 400, code: "INVALID_PROVIDER" },
   );
 });
+
+test("validates federated identity and email before account linking", async () => {
+  const service = createFederatedAuthService(createFakes());
+  await assert.rejects(
+    service.authenticateFederatedUser({ provider: "google" }),
+    { statusCode: 400, code: "INVALID_SOCIAL_IDENTITY" },
+  );
+  await assert.rejects(
+    service.authenticateFederatedUser({ provider: "google", providerId: "google-1" }),
+    { statusCode: 400, code: "EMAIL_REQUIRED" },
+  );
+});
+
+test("new federated users get default roles, fallback names, and the verified state from the provider", async () => {
+  const fakes = createFakes();
+  fakes.userRepository.updateWalletProvisioningStatus = async () => null;
+  const service = createFederatedAuthService({
+    ...fakes,
+    logger: { info() {} },
+  });
+
+  const result = await service.authenticateFederatedUser({
+    provider: "apple",
+    providerId: "apple-default",
+    email: "  NEW@example.com ",
+    name: " ",
+    roles: [],
+    termsAccepted: true,
+    emailVerified: false,
+  });
+
+  assert.equal(result.user.name, "User");
+  assert.equal(result.user.email, "new@example.com");
+  assert.deepEqual(result.user.roles, ["mentee"]);
+  assert.equal(result.user.isEmailVerified, false);
+  assert.equal(result.user.walletProvisioningStatus, "complete");
+});
+
+test("rejects invalid roles for new federated users", async () => {
+  const service = createFederatedAuthService(createFakes());
+  await assert.rejects(
+    service.authenticateFederatedUser({
+      provider: "google",
+      providerId: "google-invalid-role",
+      email: "new@example.com",
+      roles: ["admin"],
+      termsAccepted: true,
+    }),
+    { statusCode: 400, code: "INVALID_ROLE" },
+  );
+});
+
+test("recovers a duplicate OAuth mapping and preserves unrecoverable creation errors", async () => {
+  const fakes = createFakes();
+  const mappedUser = {
+    _id: "mapped-user",
+    email: "mapped@example.com",
+    roles: ["mentor"],
+  };
+  fakes.users.push(mappedUser);
+  let lookupCount = 0;
+  fakes.oauthAccountRepository.findOAuthAccountWithUser = async () => {
+    lookupCount += 1;
+    return lookupCount === 1 ? null : { user: mappedUser };
+  };
+  fakes.oauthAccountRepository.createOAuthAccount = async () => {
+    throw Object.assign(new Error("duplicate mapping"), { code: 11000 });
+  };
+  const service = createFederatedAuthService(fakes);
+
+  const recovered = await service.authenticateFederatedUser({
+    provider: "linkedin",
+    providerId: "duplicate-id",
+    email: "mapped@example.com",
+  });
+  assert.equal(recovered.user._id, "mapped-user");
+  assert.equal(recovered.isNewUser, false);
+
+  for (const createError of [
+    Object.assign(new Error("duplicate without mapping"), { code: 11000 }),
+    new Error("storage unavailable"),
+  ]) {
+    const failingFakes = createFakes();
+    failingFakes.users.push({
+      _id: "existing-user",
+      email: "existing@example.com",
+      roles: ["mentee"],
+    });
+    failingFakes.oauthAccountRepository.createOAuthAccount = async () => {
+      throw createError;
+    };
+    failingFakes.oauthAccountRepository.findOAuthAccountWithUser = async () => null;
+    const failingService = createFederatedAuthService(failingFakes);
+    await assert.rejects(
+      failingService.authenticateFederatedUser({
+        provider: "linkedin",
+        providerId: "failing-id",
+        email: "existing@example.com",
+      }),
+      (error) => error === createError,
+    );
+  }
+});

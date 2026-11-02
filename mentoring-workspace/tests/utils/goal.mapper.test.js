@@ -46,3 +46,23 @@ test("toMilestoneDTO handles lean objects with null completion fields", () => {
   assert.equal(dto.completedBy, null);
   assert.equal(dto.order, 2);
 });
+
+test("goal and milestone DTOs retain undefined identifiers and nullable values", () => {
+  const goal = toGoalDTO({});
+  assert.equal(goal._id, undefined);
+  assert.equal(goal.connectRequest, undefined);
+  assert.equal(goal.mentor, undefined);
+  assert.equal(goal.mentee, undefined);
+  assert.equal(goal.createdBy, undefined);
+
+  const milestone = toMilestoneDTO({
+    _id: null,
+    goal: null,
+    connectRequest: null,
+    completedBy: null,
+  });
+  assert.equal(milestone._id, null);
+  assert.equal(milestone.goal, null);
+  assert.equal(milestone.connectRequest, null);
+  assert.equal(milestone.completedBy, null);
+});

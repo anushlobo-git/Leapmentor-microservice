@@ -133,3 +133,53 @@ test("reschedule blocker mode returns only original request slots", async () => 
     lockedSlots: [],
   });
 });
+
+test("supports legacy request slots and forwards blocker repository failures", async () => {
+  const controller = createController({
+    availabilityBlockerRepository: {
+      findRequestSlotsById: async () => ({
+        selectedSlot: {
+          date: "2099-01-02",
+          startTime: "09:00",
+          endTime: "10:00",
+          status: "booked",
+        },
+        additionalSlots: [],
+      }),
+    },
+  });
+  const res = {
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+  await controller.getBlockers(
+    { params: { mentorId: "mentor-1" }, query: { requestId: "request-1" } },
+    res,
+    assert.fail,
+  );
+  assert.deepEqual(res.body.data.bookedSlots, [{
+    date: "2099-01-02",
+    startTime: "09:00",
+    endTime: "10:00",
+  }]);
+
+  const expected = new Error("blockers unavailable");
+  let received;
+  await createController({
+    availabilityBlockerRepository: {
+      findBookedRequestsByMentor: async () => { throw expected; },
+      findActiveLocksByMentor: async () => [],
+    },
+  }).getBlockers(
+    { params: { mentorId: "mentor-1" }, query: {} },
+    res,
+    (error) => { received = error; },
+  );
+  assert.equal(received, expected);
+});

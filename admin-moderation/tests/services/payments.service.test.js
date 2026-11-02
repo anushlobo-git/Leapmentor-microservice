@@ -2,10 +2,10 @@ const http = require("node:http");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const createApp = require("../app");
-const createAdminPaymentsService = require("../services/payments.service");
-const createAdminPaymentsRouter = require("../routes/payments.routes");
-const createAdminPaymentsController = require("../controllers/payments.controller");
+const createApp = require("../../app");
+const createAdminPaymentsService = require("../../services/payments.service");
+const createAdminPaymentsRouter = require("../../routes/payments.routes");
+const createAdminPaymentsController = require("../../controllers/payments.controller");
 
 test("Admin Payments transactions use the standard API envelope", async () => {
   const response = {
@@ -133,6 +133,102 @@ test("Admin Payments returns a complete empty pagination contract", async () => 
       totalPages: 0,
       hasMore: false,
     },
+  });
+});
+
+test("Admin Payments avoids querying transactions when a user search has no matches", async () => {
+  let paymentQueryCalled = false;
+  const service = createAdminPaymentsService({
+    paymentsClient: {
+      getAdminPaymentTransactions: async () => {
+        paymentQueryCalled = true;
+        return { data: {} };
+      },
+    },
+    workspaceClient: {},
+    identityClient: {
+      listUsers: async (query, correlationId) => {
+        assert.deepEqual(query, { search: "Unknown", page: 1, limit: 100 });
+        assert.equal(correlationId, "corr-empty-search");
+        return { data: { users: [] } };
+      },
+    },
+  });
+
+  assert.deepEqual(
+    await service.getTransactions({ search: " Unknown " }, "corr-empty-search"),
+    {
+      transactions: [],
+      pagination: {
+        totalCount: 0,
+        currentPage: 1,
+        totalPages: 0,
+        hasMore: false,
+      },
+    },
+  );
+  assert.equal(paymentQueryCalled, false);
+});
+
+test("Admin Payments falls back for missing users and normalizes invalid pagination values", async () => {
+  const service = createAdminPaymentsService({
+    paymentsClient: {
+      getAdminPaymentTransactions: async () => ({
+        data: {
+          transactions: [
+            { id: "tx-missing-user", userId: "user-1" },
+            { id: "tx-unavailable-user", userId: "user-2" },
+          ],
+          pagination: {
+            totalCount: -2,
+            currentPage: 0,
+            totalPages: "not-a-number",
+            hasMore: true,
+          },
+        },
+      }),
+    },
+    workspaceClient: {},
+    identityClient: {
+      getUser: async (userId) => {
+        if (userId === "user-2") throw new Error("Identity unavailable");
+        return { data: {} };
+      },
+    },
+  });
+
+  const result = await service.getTransactions({ page: "3", limit: "2" });
+  assert.deepEqual(result.transactions, [
+    { id: "tx-missing-user", userId: "user-1", user: { name: "-", email: "-" } },
+    { id: "tx-unavailable-user", userId: "user-2", user: { name: "-", email: "-" } },
+  ]);
+  assert.deepEqual(result.pagination, {
+    totalCount: 0,
+    currentPage: 1,
+    totalPages: 0,
+    hasMore: true,
+  });
+});
+
+test("Admin Payments derives total pages and hasMore when Payments omits pagination fields", async () => {
+  const service = createAdminPaymentsService({
+    paymentsClient: {
+      getAdminPaymentTransactions: async () => ({
+        data: {
+          transactions: [],
+          pagination: { totalCount: "5", currentPage: "2" },
+        },
+      }),
+    },
+    workspaceClient: {},
+    identityClient: {},
+  });
+
+  assert.deepEqual((await service.getTransactions({ page: "2", limit: "2" })).pagination, {
+    totalCount: 5,
+    currentPage: 2,
+    totalPages: 3,
+    hasMore: true,
   });
 });
 

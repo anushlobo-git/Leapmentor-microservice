@@ -73,3 +73,58 @@ test("blocks a deleted account with 403", async () => {
   await middleware(req, res, () => assert.fail("next must not run"));
   assert.equal(statusCode, 403);
 });
+
+test("rejects malformed, invalid, and unknown bearer sessions", async () => {
+  const invoke = async ({ authorization, verify = () => ({ id: "user-1" }), findUser = async () => ({ _id: "user-1" }) }) => {
+    const middleware = createAuthenticate({
+      tokenService: { verifyAccessToken: verify },
+      userRepository: { findUserByIdForAuthentication: findUser },
+    });
+    const result = {};
+    const res = {
+      status(code) {
+        result.status = code;
+        return this;
+      },
+      json(body) {
+        result.body = body;
+        return this;
+      },
+    };
+    let nextCalled = false;
+    await middleware({ get: () => authorization }, res, () => { nextCalled = true; });
+    return { ...result, nextCalled };
+  };
+
+  assert.equal((await invoke({ authorization: "Basic token" })).status, 401);
+  assert.deepEqual(
+    await invoke({
+      authorization: "Bearer token",
+      verify: () => { throw Object.assign(new Error("expired"), { statusCode: 403, code: "EXPIRED" }); },
+    }),
+    {
+      status: 403,
+      body: { message: "expired", code: "EXPIRED" },
+      nextCalled: false,
+    },
+  );
+  assert.deepEqual(
+    await invoke({ authorization: "Bearer token", findUser: async () => null }),
+    {
+      status: 401,
+      body: { message: "User not found" },
+      nextCalled: false,
+    },
+  );
+  assert.deepEqual(
+    await invoke({
+      authorization: "Bearer token",
+      verify: () => { throw new Error(""); },
+    }),
+    {
+      status: 401,
+      body: { message: "Invalid or expired token", code: "INVALID_ACCESS_TOKEN" },
+      nextCalled: false,
+    },
+  );
+});

@@ -2,12 +2,12 @@ const http = require("node:http");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const createApp = require("../app");
-const createSettingsRouter = require("../routes/settings.routes");
-const createReportsRouter = require("../routes/reports.routes");
-const createVerificationRouter = require("../routes/verification.routes");
-const validation = require("../middleware/settingsValidation");
-const createReportsService = require("../services/reports.service");
+const createApp = require("../../app");
+const createSettingsRouter = require("../../routes/settings.routes");
+const createReportsRouter = require("../../routes/reports.routes");
+const createVerificationRouter = require("../../routes/verification.routes");
+const validation = require("../../middleware/settingsValidation");
+const createReportsService = require("../../services/reports.service");
 
 const startServer = async (container) => {
   const server = http.createServer(createApp(container));

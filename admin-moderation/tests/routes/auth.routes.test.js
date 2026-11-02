@@ -3,12 +3,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const jwt = require("jsonwebtoken");
 
-const createApp = require("../app");
-const createAuthController = require("../controllers/auth.controller");
-const createAuthRouter = require("../routes/auth.routes");
-const createAdminAuthenticate = require("../middleware/adminAuthenticate");
-const createRequireReady = require("../middleware/requireReady");
-const { validateLogin } = require("../middleware/authValidation");
+const createApp = require("../../app");
+const createAuthController = require("../../controllers/auth.controller");
+const createAuthRouter = require("../../routes/auth.routes");
+const createAdminAuthenticate = require("../../middleware/adminAuthenticate");
+const createRequireReady = require("../../middleware/requireReady");
+const { validateLogin } = require("../../middleware/authValidation");
 
 const ACCESS_SECRET = "route-access-secret";
 

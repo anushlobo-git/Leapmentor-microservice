@@ -3,9 +3,16 @@ const assert = require("node:assert/strict");
 
 const createSessionService = require("../../services/session.service");
 
-const createService = ({ paymentsClient } = {}) => {
+const createService = ({
+  paymentsClient,
+  profileClient,
+  identityClient,
+  requestOverrides = {},
+  repositoryOverrides = {},
+} = {}) => {
   const releaseCalls = [];
   const publishedEvents = [];
+  const realtimeEvents = [];
   const request = {
     _id: "request-1",
     mentor: "mentor-1",
@@ -20,6 +27,7 @@ const createService = ({ paymentsClient } = {}) => {
       },
     ],
     additionalSlots: [],
+    ...requestOverrides,
   };
   const repository = {
     findById: async () => request,
@@ -31,6 +39,7 @@ const createService = ({ paymentsClient } = {}) => {
       request.escrowReleaseError = error || "";
       return request;
     },
+    ...repositoryOverrides,
   };
   return {
     service: createSessionService({
@@ -38,7 +47,7 @@ const createService = ({ paymentsClient } = {}) => {
       notificationClient: {
         publish: async (event) => publishedEvents.push(event),
       },
-      identityClient: {
+      identityClient: identityClient === undefined ? {
         getUserSummaries: async (ids) =>
           ids.map((id) => ({
             _id: id,
@@ -46,18 +55,23 @@ const createService = ({ paymentsClient } = {}) => {
             email:
               id === "mentor-1" ? "mentor@example.com" : "mentee@example.com",
           })),
-      },
+      } : identityClient,
       paymentsClient: paymentsClient && {
         releaseEscrow: async (...args) => {
           releaseCalls.push(args);
           return paymentsClient(...args);
         },
       },
+      profileClient,
+      realtimePublisher: {
+        publishToUser: (...args) => realtimeEvents.push(args),
+      },
       logger: { warn() {} },
     }),
     request,
     releaseCalls,
     publishedEvents,
+    realtimeEvents,
   };
 };
 
@@ -224,4 +238,267 @@ test("reuses an unpaid additional slot when the mentee retries payment", async (
   assert.equal(result.slotId, "additional-pending");
   assert.equal(result.additionalSlots.length, 1);
   assert.equal(result.slots.length, 1);
+});
+
+test("validates session reads, participants, meeting URLs, state, and slot indices", async () => {
+  const missing = createService({ repositoryOverrides: { findById: async () => null } });
+  await assert.rejects(missing.service.getSlots("missing", "mentee-1"), {
+    code: "SESSION_NOT_FOUND",
+  });
+  const fixture = createService();
+  await assert.rejects(fixture.service.getSlots("request-1", "outsider"), {
+    code: "NOT_SESSION_PARTICIPANT",
+  });
+  const empty = createService({ requestOverrides: { selectedSlots: undefined } });
+  const emptySlots = await empty.service.getSlots("request-1", "mentee-1");
+  assert.equal(emptySlots.totalSlots, 0);
+  assert.equal(emptySlots.progress, 0);
+
+  for (const meetingLink of ["", "not a URL", "http://meet.google.com/abc", "https://evil.example/room"]) {
+    await assert.rejects(
+      fixture.service.setMeetingLink({
+        connectRequestId: "request-1",
+        slotIndex: "0",
+        meetingLink,
+        userId: "mentor-1",
+      }),
+      { code: meetingLink ? "INVALID_MEETING_LINK" : "MEETING_LINK_REQUIRED" },
+    );
+  }
+  await assert.rejects(
+    missing.service.setMeetingLink({
+      connectRequestId: "missing",
+      slotIndex: "0",
+      meetingLink: "https://zoom.us/meeting",
+      userId: "mentor-1",
+    }),
+    { code: "SESSION_NOT_FOUND" },
+  );
+  await assert.rejects(
+    createService({ requestOverrides: { status: "completed" } }).service.setMeetingLink({
+      connectRequestId: "request-1",
+      slotIndex: "0",
+      meetingLink: "https://zoom.us/meeting",
+      userId: "mentor-1",
+    }),
+    { code: "SESSION_NOT_ACTIVE" },
+  );
+  await assert.rejects(
+    fixture.service.setMeetingLink({
+      connectRequestId: "request-1",
+      slotIndex: "3",
+      meetingLink: "https://zoom.us/meeting",
+      userId: "mentor-1",
+    }),
+    { code: "INVALID_SLOT_INDEX" },
+  );
+});
+
+test("completes slots, rejects cancelled slots, and handles unavailable escrow", async () => {
+  const cancelled = createService({
+    requestOverrides: {
+      selectedSlots: [{ date: "2099-01-01", startTime: "10:00", endTime: "11:00", status: "cancelled" }],
+    },
+  });
+  await assert.rejects(cancelled.service.markSlotComplete({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    userId: "mentee-1",
+  }), { code: "SLOT_CANCELLED" });
+
+  const fixture = createService({
+    requestOverrides: {
+      selectedSlots: [{ date: "2099-01-01", startTime: "10:00", endTime: "11:00", status: "booked", mentorMarked: true }],
+    },
+  });
+  const complete = await fixture.service.markSlotComplete({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    userId: "mentee-1",
+  });
+  assert.equal(complete.bothMarked, true);
+  assert.equal(complete.allComplete, true);
+  assert.equal(complete.progress, 100);
+  assert.equal(complete.escrowRelease, null);
+});
+
+test("additional-slot booking validates timing, participant, duplicates, and active state", async () => {
+  const invalid = createService();
+  for (const values of [
+    { date: "", startTime: "10:00", endTime: "11:00" },
+    { date: "2099-01-02", startTime: "12:00", endTime: "11:00" },
+  ]) {
+    await assert.rejects(invalid.service.addSlot({
+      connectRequestId: "request-1",
+      ...values,
+      userId: "mentee-1",
+    }), { code: "INVALID_SLOT" });
+  }
+  const missing = createService({ repositoryOverrides: { findById: async () => null } });
+  await assert.rejects(missing.service.addSlot({
+    connectRequestId: "missing",
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "13:00",
+    userId: "mentee-1",
+  }), { code: "SESSION_NOT_FOUND" });
+
+  const duplicate = createService();
+  duplicate.request.selectedSlots.push({
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "13:00",
+    status: "booked",
+  });
+  await assert.rejects(duplicate.service.addSlot({
+    connectRequestId: "request-1",
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "13:00",
+    userId: "mentee-1",
+  }), { code: "SLOT_EXISTS" });
+  await assert.rejects(createService({ requestOverrides: { status: "completed" } }).service.addSlot({
+    connectRequestId: "request-1",
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "13:00",
+    userId: "mentee-1",
+  }), { code: "SESSION_NOT_ACTIVE" });
+});
+
+test("cancels slots only once and skips email when participant summaries are unavailable", async () => {
+  const fixture = createService({ identityClient: null });
+  const result = await fixture.service.cancelSlot({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    reason: "  reschedule  ",
+    userId: "mentor-1",
+  });
+  assert.equal(result.slot.cancelledBy, "mentor");
+  assert.equal(result.slot.cancellationReason, "reschedule");
+  await assert.rejects(fixture.service.cancelSlot({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    reason: "",
+    userId: "mentee-1",
+  }), { code: "SLOT_CANCELLED" });
+
+  await assert.rejects(createService({ repositoryOverrides: { findById: async () => null } }).service.cancelSlot({
+    connectRequestId: "missing",
+    slotIndex: "0",
+    userId: "mentee-1",
+  }), { code: "SESSION_NOT_FOUND" });
+  await assert.rejects(createService({ requestOverrides: { status: "completed" } }).service.cancelSlot({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    userId: "mentee-1",
+  }), { code: "SESSION_NOT_ACTIVE" });
+});
+
+test("continues slot cancellation when Identity cannot supply email recipients", async () => {
+  const fixture = createService({
+    identityClient: {
+      getUserSummaries: async () => { throw new Error("Identity unavailable"); },
+    },
+  });
+  const cancelled = await fixture.service.cancelSlot({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    reason: "reschedule",
+    userId: "mentee-1",
+  });
+  assert.equal(cancelled.slot.status, "cancelled");
+  assert.equal(fixture.realtimeEvents.length, 2);
+  assert.deepEqual(fixture.publishedEvents, []);
+});
+
+test("reschedules only valid, active, noncancelled, nonduplicate slots", async () => {
+  const fixture = createService();
+  await assert.rejects(fixture.service.rescheduleSlot({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "11:00",
+    userId: "mentor-1",
+  }), { code: "INVALID_SLOT" });
+  const duplicate = createService();
+  duplicate.request.selectedSlots.push({
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "13:00",
+    status: "booked",
+  });
+  await assert.rejects(duplicate.service.rescheduleSlot({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "13:00",
+    userId: "mentor-1",
+  }), { code: "SLOT_EXISTS" });
+  await assert.rejects(createService({
+    requestOverrides: {
+      selectedSlots: [{ date: "2099-01-01", startTime: "10:00", endTime: "11:00", status: "cancelled" }],
+    },
+  }).service.rescheduleSlot({
+    connectRequestId: "request-1",
+    slotIndex: "0",
+    date: "2099-01-02",
+    startTime: "12:00",
+    endTime: "13:00",
+    userId: "mentor-1",
+  }), { code: "SLOT_CANCELLED" });
+});
+
+test("availability uses defaults without Profile and delegates when it is available", async () => {
+  const fixture = createService();
+  assert.deepEqual(await fixture.service.getMentorAvailability(
+    "request-1",
+    45,
+    "mentee-1",
+    "corr-availability",
+  ), {
+    slots: [],
+    timezone: "Asia/Kolkata",
+    sessionDurations: [30, 60],
+  });
+
+  let args;
+  const withProfile = createService({
+    profileClient: {
+      getMentorAvailability: async (...values) => {
+        args = values;
+        return { slots: ["available"] };
+      },
+    },
+  });
+  assert.deepEqual(await withProfile.service.getMentorAvailability(
+    "request-1",
+    30,
+    "mentor-1",
+    "corr-profile",
+  ), { slots: ["available"] });
+  assert.deepEqual(args, ["mentor-1", 30, "mentor-1", "corr-profile", "request-1"]);
+  await assert.rejects(createService({
+    repositoryOverrides: { findById: async () => null },
+  }).service.getMentorAvailability("missing", 30, "mentee-1"), {
+    code: "SESSION_NOT_FOUND",
+  });
+});
+
+test("escrow retry safely skips when payment dependencies are unavailable", async () => {
+  const noPayments = createService();
+  assert.deepEqual(await noPayments.service.retryPendingEscrowReleases(), {
+    attempted: 0,
+    released: 0,
+  });
+  const noRepositoryFunction = createService({
+    paymentsClient: async () => ({ status: "released" }),
+    repositoryOverrides: { findPendingEscrowReleases: undefined },
+  });
+  assert.deepEqual(await noRepositoryFunction.service.retryPendingEscrowReleases(), {
+    attempted: 0,
+    released: 0,
+  });
 });

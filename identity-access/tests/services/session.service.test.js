@@ -56,3 +56,13 @@ test("rejects a refresh token for a missing user", async () => {
     { statusCode: 401, code: "USER_NOT_FOUND" },
   );
 });
+
+test("rejects refresh tokens for soft-deleted users", async () => {
+  const service = createService({
+    user: { _id: "user-1", isDeleted: true },
+  });
+  await assert.rejects(
+    service.refreshAccessToken("refresh-token"),
+    { statusCode: 401, code: "USER_NOT_FOUND" },
+  );
+});

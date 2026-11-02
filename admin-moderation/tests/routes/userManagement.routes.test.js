@@ -2,10 +2,10 @@ const http = require("node:http");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const createApp = require("../app");
-const createUserManagementController = require("../controllers/userManagement.controller");
-const createUserManagementRouter = require("../routes/userManagement.routes");
-const { validateUsersQuery, validateUserId } = require("../middleware/userValidation");
+const createApp = require("../../app");
+const createUserManagementController = require("../../controllers/userManagement.controller");
+const createUserManagementRouter = require("../../routes/userManagement.routes");
+const { validateUsersQuery, validateUserId } = require("../../middleware/userValidation");
 
 const startServer = async (service) => {
   const server = http.createServer(createApp({

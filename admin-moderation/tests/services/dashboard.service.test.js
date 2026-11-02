@@ -2,11 +2,11 @@ const http = require("node:http");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const createApp = require("../app");
-const createDashboardService = require("../services/dashboard.service");
-const createDashboardController = require("../controllers/dashboard.controller");
-const createDashboardRouter = require("../routes/dashboard.routes");
-const createTtlCache = require("../utils/ttlCache");
+const createApp = require("../../app");
+const createDashboardService = require("../../services/dashboard.service");
+const createDashboardController = require("../../controllers/dashboard.controller");
+const createDashboardRouter = require("../../routes/dashboard.routes");
+const createTtlCache = require("../../utils/ttlCache");
 
 test("dashboard service caches telemetry and delegates to owning services", async () => {
   let identityCalls = 0;
@@ -220,6 +220,82 @@ test("engagement history passes an exact mentee ID to Workspace", async () => {
   assert.equal(workspaceQuery.menteeId, "mentee-1");
   assert.equal(workspaceQuery.userIds, undefined);
   assert.equal(result.engagements[0].mentee._id, "mentee-1");
+});
+
+test("engagement search returns an empty page without querying Workspace when no users match", async () => {
+  let workspaceCalled = false;
+  const service = createDashboardService({
+    identityClient: {
+      listUsers: async (query, correlationId) => {
+        assert.deepEqual(query, { search: "Nobody", page: 1, limit: 100 });
+        assert.equal(correlationId, "corr-no-match");
+        return { data: { users: [] } };
+      },
+    },
+    profileClient: {},
+    workspaceClient: {
+      getEngagements: async () => {
+        workspaceCalled = true;
+        return { data: {} };
+      },
+    },
+    cache: createTtlCache(),
+  });
+
+  assert.deepEqual(
+    await service.getEngagements(
+      { search: "  Nobody ", page: "3", limit: "25" },
+      "corr-no-match",
+    ),
+    { engagements: [], pagination: { total: 0, page: 3, totalPages: 0 } },
+  );
+  assert.equal(workspaceCalled, false);
+});
+
+test("engagement search decorates missing or unavailable participants with placeholders", async () => {
+  let workspaceQuery;
+  const service = createDashboardService({
+    identityClient: {
+      listUsers: async () => ({ data: { users: [{ _id: "matched-user", name: "Matched" }] } }),
+      getUser: async () => {
+        throw new Error("Identity unavailable");
+      },
+    },
+    profileClient: {},
+    workspaceClient: {
+      getEngagements: async (query) => {
+        workspaceQuery = query;
+        return {
+          data: {
+            engagements: [
+              { _id: "engagement-1", mentor: "unavailable-user", mentee: "matched-user" },
+              { _id: "engagement-2", mentor: "unavailable-user", mentee: "unknown-user" },
+            ],
+            pagination: { total: 2, page: 1, totalPages: 1 },
+          },
+        };
+      },
+    },
+    cache: createTtlCache(),
+  });
+
+  const result = await service.getEngagements({ search: "Matched" }, "corr-placeholders");
+
+  assert.equal(workspaceQuery.userIds, "matched-user");
+  assert.deepEqual(result.engagements[0].mentor, {
+    _id: "unavailable-user",
+    name: "-",
+    email: "-",
+  });
+  assert.deepEqual(result.engagements[0].mentee, {
+    _id: "matched-user",
+    name: "Matched",
+  });
+  assert.deepEqual(result.engagements[1].mentee, {
+    _id: "unknown-user",
+    name: "-",
+    email: "-",
+  });
 });
 
 test("engagement route rejects invalid filters before calling the service", async () => {

@@ -126,3 +126,83 @@ test("cleans up the OTP when reset email delivery fails", async () => {
   );
   assert.equal(fakes.records.length, 0);
 });
+
+test("forgot-password service validates email, reset input, and account existence", async () => {
+  const fakes = createFakes();
+  await assert.rejects(
+    fakes.service.sendForgotPasswordOtp(""),
+    (error) => error.code === "INVALID_EMAIL",
+  );
+  await assert.rejects(
+    fakes.service.verifyResetOtp("", "123456"),
+    (error) => error.code === "INVALID_RESET_INPUT",
+  );
+  await assert.rejects(
+    fakes.service.verifyResetOtp("missing@example.com", ""),
+    (error) => error.code === "INVALID_RESET_INPUT",
+  );
+  await assert.rejects(
+    fakes.service.resetPassword({ email: "user@example.com", otp: "123456", newPassword: "short" }),
+    (error) => error.code === "INVALID_PASSWORD",
+  );
+  await assert.rejects(
+    fakes.service.resetPassword({ email: "user@example.com", otp: "123456", newPassword: "long-enough" }),
+    (error) => error.code === "RESET_SESSION_EXPIRED",
+  );
+
+  const missingUser = createFakes({ userExists: false });
+  await assert.rejects(
+    missingUser.service.verifyResetOtp("unknown@example.com", "123456"),
+    (error) => error.code === "INVALID_RESET_OTP",
+  );
+});
+
+test("reset OTP rejects absent, expired, and incorrect OTP records", async () => {
+  const absent = createFakes();
+  await assert.rejects(
+    absent.service.verifyResetOtp("user@example.com", "123456"),
+    (error) => error.code === "RESET_REQUEST_NOT_FOUND",
+  );
+
+  const expired = createFakes();
+  await expired.service.sendForgotPasswordOtp("user@example.com");
+  expired.records[0].expiresAt = new Date("2026-10-24T11:59:00.000Z");
+  await assert.rejects(
+    expired.service.verifyResetOtp("user@example.com", "123456"),
+    (error) => error.code === "OTP_EXPIRED",
+  );
+  assert.equal(expired.records.length, 0);
+
+  const invalid = createFakes();
+  await invalid.service.sendForgotPasswordOtp("user@example.com");
+  await assert.rejects(
+    invalid.service.verifyResetOtp("user@example.com", "000000"),
+    (error) => error.code === "INVALID_RESET_OTP",
+  );
+});
+
+test("password reset rejects expired and invalid reset sessions and consumes a valid session", async () => {
+  const expired = createFakes();
+  await expired.service.sendForgotPasswordOtp("user@example.com");
+  expired.records[0].expiresAt = new Date("2026-10-24T11:59:00.000Z");
+  await assert.rejects(
+    expired.service.resetPassword({
+      email: "user@example.com",
+      otp: "123456",
+      newPassword: "password123",
+    }),
+    (error) => error.code === "RESET_SESSION_EXPIRED",
+  );
+  assert.equal(expired.records.length, 0);
+
+  const invalid = createFakes();
+  await invalid.service.sendForgotPasswordOtp("user@example.com");
+  await assert.rejects(
+    invalid.service.resetPassword({
+      email: "user@example.com",
+      otp: "000000",
+      newPassword: "password123",
+    }),
+    (error) => error.code === "INVALID_RESET_SESSION",
+  );
+});

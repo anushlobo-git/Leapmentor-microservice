@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const createLeapRequestsService = require("../services/leapRequests.service");
+const createLeapRequestsService = require("../../services/leapRequests.service");
 
 test("decorates wallet requests with batched Identity user summaries", async () => {
   let summaryLookup;
@@ -91,4 +91,54 @@ test("propagates Identity lookup failures instead of returning IDs as successful
   });
 
   await assert.rejects(service.getRequests(), /Identity unavailable/);
+});
+
+test("supports pending count, approval, and rejection payment operations", async () => {
+  const calls = [];
+  const service = createLeapRequestsService({
+    paymentsClient: {
+      getPendingLeapRequestCount: async (correlationId) => {
+        calls.push(["count", correlationId]);
+        return { data: { count: 4 } };
+      },
+      approveLeapRequest: async (...args) => {
+        calls.push(["approve", ...args]);
+        return { data: { request: { _id: "request-1", status: "accepted" } } };
+      },
+      rejectLeapRequest: async (...args) => {
+        calls.push(["reject", ...args]);
+        return { data: { request: { _id: "request-2", status: "rejected" } } };
+      },
+    },
+    identityClient: {},
+  });
+
+  assert.equal(await service.getPendingCount("corr-count"), 4);
+  assert.deepEqual(await service.approve("request-1", "admin-1", "corr-approve"), {
+    request: { _id: "request-1", status: "accepted" },
+  });
+  assert.deepEqual(await service.reject("request-2", "admin-2", "corr-reject"), {
+    _id: "request-2",
+    status: "rejected",
+  });
+  assert.deepEqual(calls, [
+    ["count", "corr-count"],
+    ["approve", "request-1", "admin-1", "corr-approve"],
+    ["reject", "request-2", "admin-2", "corr-reject"],
+  ]);
+});
+
+test("uses empty or null fallbacks when Payments omits operation data", async () => {
+  const service = createLeapRequestsService({
+    paymentsClient: {
+      getPendingLeapRequestCount: async () => ({ data: {} }),
+      approveLeapRequest: async () => ({}),
+      rejectLeapRequest: async () => ({ data: {} }),
+    },
+    identityClient: {},
+  });
+
+  assert.equal(await service.getPendingCount(), 0);
+  assert.deepEqual(await service.approve("request-1", "admin-1"), {});
+  assert.equal(await service.reject("request-1", "admin-1"), null);
 });

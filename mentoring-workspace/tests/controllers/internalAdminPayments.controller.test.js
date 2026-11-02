@@ -52,3 +52,51 @@ test("returns six monthly revenue points from Workspace session records", async 
   assert.equal(monthRanges.length, 6);
   assert.equal(monthRanges[0][1].getTime(), monthRanges[1][0].getTime());
 });
+
+test("treats missing payment amounts as zero and forwards repository errors", async () => {
+  const controller = createController({
+    connectRequestRepository: {
+      findCompletedPaidSessions: async () => [
+        {},
+        { totalAmount: null, commissionAmount: undefined },
+      ],
+      countRefundedRequests: async () => 0,
+    },
+  });
+  const res = response();
+  await controller.getStats({}, res, assert.fail);
+  assert.deepEqual(res.body.data, {
+    totalRevenue: 0,
+    platformCommission: 0,
+    refundedRequests: 0,
+  });
+
+  const expected = new Error("finance repository failed");
+  const statsError = createController({
+    connectRequestRepository: {
+      findCompletedPaidSessions: async () => { throw expected; },
+      countRefundedRequests: async () => 0,
+    },
+  });
+  let received;
+  await statsError.getStats({}, response(), (error) => { received = error; });
+  assert.equal(received, expected);
+
+  const chartError = createController({
+    connectRequestRepository: {
+      findSessionsByMonth: async () => { throw expected; },
+    },
+  });
+  received = undefined;
+  await chartError.getChart({}, response(), (error) => { received = error; });
+  assert.equal(received, expected);
+});
+
+test("returns zero for months with no revenue", async () => {
+  const controller = createController({
+    connectRequestRepository: { findSessionsByMonth: async () => [] },
+  });
+  const res = response();
+  await controller.getChart({}, res, assert.fail);
+  assert.equal(res.body.data.every((month) => month.amount === 0), true);
+});

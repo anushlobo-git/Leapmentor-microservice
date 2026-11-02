@@ -3,10 +3,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const jwt = require("jsonwebtoken");
 
-const createApp = require("../app");
-const createInternalServiceAuth = require("../middleware/internalServiceAuth");
-const createInternalAdminAuthController = require("../controllers/internalAdminAuth.controller");
-const createInternalAdminAuthRouter = require("../routes/internalAdminAuth.routes");
+const createApp = require("../../app");
+const createInternalServiceAuth = require("../../middleware/internalServiceAuth");
+const createInternalAdminAuthController = require("../../controllers/internalAdminAuth.controller");
+const createInternalAdminAuthRouter = require("../../routes/internalAdminAuth.routes");
 
 const start = async (container) => {
   const server = http.createServer(createApp(container));
@@ -105,8 +105,70 @@ test("rejects a signed Admin token with a stale tokenVersion", async () => {
   assert.equal(forwardedError.code, "SESSION_REVOKED");
 });
 
+test("internal Admin session validation rejects malformed sessions and forwards repository failures", async () => {
+  const admin = { _id: "admin-1", isActive: true };
+  const buildController = ({
+    decoded = { id: "admin-1", role: "admin", type: "access", tokenVersion: 0 },
+    findAdminByIdFull = async () => admin,
+  } = {}) => createInternalAdminAuthController({
+    adminUserRepository: { findAdminByIdFull },
+    jwt: {
+      verify: (token) => {
+        if (token === "invalid") throw new Error("expired");
+        return decoded;
+      },
+    },
+    accessSecret: "secret",
+    toAdminDTO: (value) => ({ _id: value._id }),
+  });
+  const invoke = async (controller, token) => {
+    let forwarded;
+    await controller.validateSession(
+      { body: token === undefined ? {} : { token } },
+      { status: () => ({ json: (body) => body }) },
+      (error) => { forwarded = error; },
+    );
+    return forwarded;
+  };
+
+  assert.equal((await invoke(buildController(), undefined)).code, "ADMIN_TOKEN_REQUIRED");
+  assert.equal((await invoke(buildController(), "invalid")).code, "INVALID_ADMIN_TOKEN");
+  assert.equal(
+    (await invoke(buildController({ decoded: { id: "admin-1", role: "user", type: "access" } }), "token")).code,
+    "INVALID_ADMIN_TOKEN",
+  );
+  assert.equal(
+    (await invoke(buildController({ findAdminByIdFull: async () => null }), "token")).code,
+    "ADMIN_NOT_FOUND",
+  );
+  assert.equal(
+    (await invoke(buildController({ findAdminByIdFull: async () => ({ ...admin, isActive: false }) }), "token")).code,
+    "ADMIN_INACTIVE",
+  );
+
+  let successBody;
+  const successfulController = buildController();
+  await successfulController.validateSession(
+    { body: { token: "token" } },
+    { status: (code) => ({ json: (body) => { successBody = { code, body }; } }) },
+    assert.fail,
+  );
+  assert.deepEqual(successBody, {
+    code: 200,
+    body: { success: true, data: { admin: { _id: "admin-1" } } },
+  });
+
+  const repositoryError = await invoke(
+    buildController({
+      findAdminByIdFull: async () => { throw new Error("database unavailable"); },
+    }),
+    "token",
+  );
+  assert.match(repositoryError.message, /database unavailable/);
+});
+
 test("production admin container exposes internal session validation dependencies", () => {
-  const container = require("../container");
+  const container = require("../../container");
 
   assert.equal(typeof container.internalServiceAuth, "function");
   assert.equal(typeof container.internalAdminAuthRouter, "function");
