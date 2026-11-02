@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mentoring-workspace
+  labels:
+    app.kubernetes.io/name: mentoring-workspace
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mentoring-workspace
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mentoring-workspace
+        app.kubernetes.io/component: backend
+    spec:
+      containers:
+        - name: mentoring-workspace
+          image: leapmentor-local-mentoring-workspace:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5003
+          envFrom:
+            - configMapRef:
+                name: mentoring-workspace-config
+            - secretRef:
+                name: mentoring-workspace-secrets
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-moderation
+  labels:
+    app.kubernetes.io/name: admin-moderation
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: admin-moderation
+  ports:
+    - name: http
+      port: 5006
+      targetPort: http

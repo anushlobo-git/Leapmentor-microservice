@@ -1,0 +1,28 @@
+#this is a headless service that is u know the address of each of the pods running inside and 
+#u accept the request nad send to that perticualr pod in here deployment is nt useed instead we are using the 
+#A Headless Service doesn't act like a normal load balancer. Instead, it provides DNS records that let clients 
+#discover individual Pods and connect directly to the one they want.
+#statefulset to manage the container inside the pod because the statefulset provides the name that wont change along 
+#with the id address aand gives the services a stable name such as here mongo-0 because it has one replicaset 
+#clusterIp one decides if the service is normal or headless if none then headless 
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  labels:
+    app.kubernetes.io/name: mongo
+    app.kubernetes.io/component: database
+spec:
+  # A headless Service gives each StatefulSet Pod a stable DNS identity.
+  # The first MongoDB replica is reachable as mongo-0.mongo:27017.
+  clusterIP: None
+  # MongoDB is unready until rs.initiate() is run. Publish its DNS record so
+  # it can still be reached during that manual initialization step.
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: mongo
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb

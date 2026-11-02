@@ -32,3 +32,5 @@ CONTAINER_BUILD.md
 .DS_Store
 .idea/
 *.swp
+
+/study
