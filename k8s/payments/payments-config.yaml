@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: payments-config
+  namespace: leapmentor
 data:
   NODE_ENV: production
   PORT: "5004"

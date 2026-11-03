@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: admin-moderation
+  namespace: leapmentor
   labels:
     app.kubernetes.io/name: admin-moderation
     app.kubernetes.io/component: backend

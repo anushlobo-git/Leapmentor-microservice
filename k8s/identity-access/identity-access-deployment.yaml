@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: identity-access
+  namespace: leapmentor
   labels:
     app.kubernetes.io/name: identity-access
     app.kubernetes.io/component: backend

@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: payments
+  namespace: leapmentor
   labels:
     app.kubernetes.io/name: payments
     app.kubernetes.io/component: backend
