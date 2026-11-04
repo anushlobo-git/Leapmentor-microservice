@@ -6,6 +6,20 @@ const MAX_CONTENT_LENGTH = 5000;
 const createMessageSocketHandler = ({ io, messageService: _messageService, messageRepository, connectRequestRepository, notificationClient = { publish: async () => null } }) => {
   const onlineUsers = new Map();
 
+  const removeSocketFromRoom = (socket, room) => {
+    const roomUsers = onlineUsers.get(room);
+    const userSockets = roomUsers?.get(String(socket.user._id));
+    if (!userSockets) return;
+
+    userSockets.delete(socket.id);
+    if (userSockets.size > 0) return;
+
+    const userId = String(socket.user._id);
+    roomUsers.delete(userId);
+    socket.to(room).emit("user_offline", { userId });
+    if (roomUsers.size === 0) onlineUsers.delete(room);
+  };
+
   const getRoomContext = async (connectRequestId, userId) => {
     if (!ROOM_ID.test(String(connectRequestId || ""))) return null;
     const request = await connectRequestRepository.findById(connectRequestId);
@@ -23,12 +37,23 @@ const createMessageSocketHandler = ({ io, messageService: _messageService, messa
       const request = await getRoomContext(connectRequestId, userId);
       if (!request) return emitSocketError(socket, "Not authorized to join this room", "NOT_SESSION_PARTICIPANT");
 
+      if (socket.currentRoom && socket.currentRoom !== connectRequestId) {
+        const previousRoom = socket.currentRoom;
+        socket.leave(previousRoom);
+        removeSocketFromRoom(socket, previousRoom);
+      }
+      if (socket.currentRoom === connectRequestId) return;
+
       socket.join(connectRequestId);
       socket.currentRoom = connectRequestId;
-      if (!onlineUsers.has(connectRequestId)) onlineUsers.set(connectRequestId, new Set());
-      const existingUsers = [...onlineUsers.get(connectRequestId)];
-      onlineUsers.get(connectRequestId).add(userId);
-      socket.to(connectRequestId).emit("user_online", { userId });
+      if (!onlineUsers.has(connectRequestId)) onlineUsers.set(connectRequestId, new Map());
+      const roomUsers = onlineUsers.get(connectRequestId);
+      const existingUsers = [...roomUsers.keys()].filter((existingUserId) => existingUserId !== userId);
+      const userSockets = roomUsers.get(userId) || new Set();
+      const wasOnline = userSockets.size > 0;
+      userSockets.add(socket.id);
+      roomUsers.set(userId, userSockets);
+      if (!wasOnline) socket.to(connectRequestId).emit("user_online", { userId });
       for (const existingUserId of existingUsers) socket.emit("user_online", { userId: existingUserId });
 
       const readAt = new Date();
@@ -82,11 +107,8 @@ const createMessageSocketHandler = ({ io, messageService: _messageService, messa
 
     socket.on("disconnect", () => {
       const room = socket.currentRoom;
-      if (!room || !onlineUsers.has(room)) return;
-      const users = onlineUsers.get(room);
-      users.delete(userId);
-      if (users.size === 0) onlineUsers.delete(room);
-      socket.to(room).emit("user_offline", { userId });
+      if (!room) return;
+      removeSocketFromRoom(socket, room);
     });
   });
 

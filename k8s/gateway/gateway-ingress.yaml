@@ -15,9 +15,12 @@ spec:
   # Add the real public hostname to tls.hosts and rules.host after DNS is
   # configured. The TLS secret must contain a certificate for that hostname.
   tls:
-    - secretName: leapmentor-tls
+    - hosts:
+        - leapmentor.local
+      secretName: leapmentor-tls
   rules:
-    - http:
+    - host: leapmentor.local
+      http:
         paths:
           - path: /
             pathType: Prefix
