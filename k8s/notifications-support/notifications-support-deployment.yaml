@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifications-support
+  namespace: leapmentor
+  labels:
+    app.kubernetes.io/name: notifications-support
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: notifications-support
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: notifications-support
+        app.kubernetes.io/component: backend
+    spec:
+      containers:
+        - name: notifications-support
+          image: leapmentor-local-notifications-support:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5005
+          envFrom:
+            - configMapRef:
+                name: notifications-support-config
+            - secretRef:
+                name: notifications-support-secrets
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+!**/.env.example
 
 # Logs and runtime output
 *.log
@@ -18,7 +19,17 @@ coverage/
 dist/
 build/
 
+# Local developer helpers and notes
+/README.md
+/migration-docs/
+start-local.sh
+setup-local-env.sh
+COMMUNICATION.md
+CONTAINER_BUILD.md
+
 # OS/editor files
 .DS_Store
 .idea/
 *.swp
+
+/study

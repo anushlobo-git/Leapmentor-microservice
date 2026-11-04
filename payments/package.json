@@ -1,0 +1,32 @@
+{
+  "name": "@leapmentor/payments",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LeapMentor Payments service",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test",
+    "lint": "eslint . --config ../.eslintrc.cjs",
+    "format": "prettier --write . --ignore-path ../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../.prettierignore",
+    "seed:commission": "node scripts/seedPlatformCommission.js",
+    "fix:wallet-indexes": "node scripts/fixWalletIndexes.js"
+  },
+  "engines": {
+    "node": ">=18 <23",
+    "npm": ">=9"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.2.1",
+    "pdfkit": "^0.20.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "prettier": "^3.6.2"
+  }
+}

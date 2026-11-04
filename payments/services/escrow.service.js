@@ -1,0 +1,617 @@
+const AppError = require("../utils/AppError");
+
+const ROLE_MENTEE = "mentee";
+const ROLE_MENTOR = "mentor";
+
+const idOf = (value) =>
+  value?._id?.toString?.() || value?.toString?.() || value;
+
+const createEscrowService = ({
+  walletRepository,
+  transactionRepository,
+  workspaceClient,
+  runInTransaction,
+  commissionRate = 20,
+  getCommissionRate = async () => commissionRate,
+  generateInvoice,
+  logger = console,
+}) => {
+  const requireAmount = (value, label) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 1) {
+      throw new AppError(
+        `${label} must be at least 1`,
+        400,
+        "INVALID_PAYMENT_AMOUNT",
+      );
+    }
+    return amount;
+  };
+
+  const getContext = (requestId, correlationId) =>
+    workspaceClient.getPaymentContext(requestId, correlationId);
+
+  const queueInvoiceEmail = async (requestId, correlationId) => {
+    if (
+      !generateInvoice ||
+      typeof workspaceClient.getInvoiceContext !== "function" ||
+      typeof workspaceClient.queueInvoiceEmail !== "function"
+    )
+      return;
+    try {
+      const request = await workspaceClient.getInvoiceContext(
+        requestId,
+        correlationId,
+      );
+      if (!request?.mentee?.email) return;
+      const invoiceNumber = `INV-${String(requestId).slice(-8).toUpperCase()}`;
+      const pdf = await generateInvoice({
+        ...request,
+        invoiceNumber,
+        platformFeePercent:
+          request.commissionRate ?? (await getCommissionRate()),
+      });
+      await workspaceClient.queueInvoiceEmail(
+        {
+          eventType: "payment.invoice.email",
+          sourceEventId: `payment-invoice:${requestId}`,
+          invoiceNumber,
+          reporterEmail: request.mentee.email,
+          reporterName: request.mentee.name,
+          mentorName: request.mentor?.name,
+          sessionRate: request.sessionRate,
+          sessionCount: request.sessionCount,
+          totalAmount: request.totalAmount,
+          invoicePdfBase64: pdf.toString("base64"),
+        },
+        correlationId,
+      );
+    } catch (error) {
+      logger.warn?.("Invoice email could not be queued after payment", {
+        requestId: String(requestId),
+        error: error.message,
+      });
+    }
+  };
+
+  const queuePaymentEmails = async (requestId, correlationId) => {
+    if (
+      typeof workspaceClient.getInvoiceContext !== "function" ||
+      typeof workspaceClient.queueEmailEvent !== "function"
+    )
+      return;
+    try {
+      const request = await workspaceClient.getInvoiceContext(
+        requestId,
+        correlationId,
+      );
+      if (!request?.mentor?.email || !request?.mentee?.email) return;
+      const participants = {
+        requestId: String(requestId),
+        mentorName: request.mentor.name,
+        mentorEmail: request.mentor.email,
+        menteeName: request.mentee.name,
+        menteeEmail: request.mentee.email,
+        slots: request.selectedSlots || [],
+        timezone: request.timezone || "Asia/Kolkata",
+        message: request.message || "",
+      };
+      const events = [
+        {
+          ...participants,
+          eventType: "payment.received.email",
+          sourceEventId: `payment-received:${requestId}`,
+          sessionRate: request.sessionRate,
+          sessionCount: request.sessionCount,
+          mentorPayout: request.mentorPayout,
+          commissionRate: request.commissionRate,
+        },
+        {
+          ...participants,
+          eventType: "payment.calendar-invite.email",
+          sourceEventId: `payment-calendar-invite:${requestId}`,
+        },
+      ];
+      await Promise.all(
+        events.map(async (event) => {
+          try {
+            await workspaceClient.queueEmailEvent(event, correlationId);
+          } catch (error) {
+            logger.warn?.("Payment email event could not be queued", {
+              requestId: String(requestId),
+              eventType: event.eventType,
+              error: error.message,
+            });
+          }
+        }),
+      );
+    } catch (error) {
+      logger.warn?.("Payment email context could not be loaded", {
+        requestId: String(requestId),
+        error: error.message,
+      });
+    }
+  };
+
+  const requireParticipant = (context, userId) => {
+    const user = idOf(userId);
+    const isMentee = idOf(context.mentee) === user;
+    const isMentor = idOf(context.mentor) === user;
+    if (!isMentee && !isMentor) {
+      throw new AppError(
+        "Not authorized for this connect request",
+        403,
+        "NOT_REQUEST_PARTICIPANT",
+      );
+    }
+    return { isMentee, isMentor };
+  };
+
+  const pay = async ({
+    connectRequestId,
+    sessionRate,
+    sessionCount,
+    menteeId,
+    correlationId,
+  }) => {
+    if (!connectRequestId)
+      throw new AppError("connectRequestId is required", 400);
+    const rate = requireAmount(sessionRate, "sessionRate");
+    const count = requireAmount(sessionCount, "sessionCount");
+    const context = await getContext(connectRequestId, correlationId);
+    if (idOf(context.mentee) !== idOf(menteeId))
+      throw new AppError("Not authorized to pay for this request", 403);
+    if (context.status !== "accepted")
+      throw new AppError(
+        `Payment only allowed on accepted requests. Current status: ${context.status}`,
+        400,
+      );
+    if (context.paymentStatus === "paid")
+      throw new AppError("Payment already made for this session", 409);
+
+    const activeCommissionRate = await getCommissionRate();
+    const fee = Math.ceil((rate * count * activeCommissionRate) / 100);
+    const totalAmount = rate * count + fee;
+    const local = await runInTransaction(async (session) => {
+      const wallet = await walletRepository.findByUserIdAndRole(
+        menteeId,
+        ROLE_MENTEE,
+        session,
+      );
+      if (!wallet) throw new AppError("Mentee wallet not found", 404);
+      if (wallet.balance < totalAmount)
+        throw new AppError(
+          `Insufficient balance. You have ${wallet.balance} tokens but need ${totalAmount}`,
+          400,
+        );
+      wallet.balance -= totalAmount;
+      wallet.escrow += totalAmount;
+      await walletRepository.save(wallet, session);
+      await transactionRepository.createMany(
+        [
+          {
+            user: menteeId,
+            type: "escrow_hold",
+            amount: totalAmount,
+            connectRequest: connectRequestId,
+            description: `Escrow hold — ${count} session(s) × ${rate} tokens + ${activeCommissionRate}% platform fee`,
+            balanceAfter: wallet.balance,
+          },
+        ],
+        session,
+      );
+      return { balance: wallet.balance, escrow: wallet.escrow };
+    });
+
+    await workspaceClient.updatePaymentState(
+      connectRequestId,
+      {
+        sessionRate: rate,
+        sessionCount: count,
+        totalAmount,
+        commissionRate: activeCommissionRate,
+        commissionAmount: fee,
+        mentorPayout: rate * count,
+        paymentStatus: "paid",
+        status: "ongoing",
+        paidAt: new Date(),
+      },
+      correlationId,
+    );
+    await queueInvoiceEmail(connectRequestId, correlationId);
+    await queuePaymentEmails(connectRequestId, correlationId);
+
+    return {
+      mentorAmount: rate * count,
+      platformFee: fee,
+      totalAmount,
+      commissionRate: activeCommissionRate,
+      ...local,
+      paymentStatus: "paid",
+      status: "ongoing",
+    };
+  };
+
+  const payAdditional = async ({
+    connectRequestId,
+    sessionRate,
+    slotId,
+    slot,
+    menteeId,
+    correlationId,
+  }) => {
+    if (!connectRequestId || (!slotId && !slot))
+      throw new AppError(
+        "connectRequestId, sessionRate, and slot data are required",
+        400,
+      );
+    const rate = requireAmount(sessionRate, "sessionRate");
+    const context = await getContext(connectRequestId, correlationId);
+    if (idOf(context.mentee) !== idOf(menteeId))
+      throw new AppError("Not authorized to pay for this request", 403);
+    if (context.status !== "ongoing")
+      throw new AppError(
+        "Additional payment only allowed on ongoing sessions",
+        400,
+      );
+    let additionalSlotId = slotId;
+    if (!additionalSlotId) {
+      if (typeof workspaceClient.createAdditionalSlot !== "function") {
+        throw new AppError(
+          "Workspace cannot create an additional slot for payment",
+          503,
+          "WORKSPACE_SLOT_CREATION_UNAVAILABLE",
+        );
+      }
+      const created = await workspaceClient.createAdditionalSlot(
+        connectRequestId,
+        slot,
+        menteeId,
+        correlationId,
+      );
+      additionalSlotId = created?.slotId || created?.slot?._id;
+      if (!additionalSlotId) {
+        throw new AppError(
+          "Workspace did not return the additional slot ID",
+          502,
+          "WORKSPACE_SLOT_CREATION_FAILED",
+        );
+      }
+    }
+    const additionalSlot = (context.additionalSlots || []).find(
+      (item) => idOf(item) === idOf(additionalSlotId),
+    ) || (slot && { ...slot, _id: additionalSlotId, paymentStatus: "pending" });
+    if (!additionalSlot) throw new AppError("Additional slot not found", 404);
+    if (additionalSlot.paymentStatus === "paid")
+      throw new AppError("This slot has already been paid for", 409);
+    const activeCommissionRate = await getCommissionRate();
+    const fee = Math.ceil((rate * activeCommissionRate) / 100);
+    const totalAmount = rate + fee;
+    const local = await runInTransaction(async (session) => {
+      const wallet = await walletRepository.findByUserIdAndRole(
+        menteeId,
+        ROLE_MENTEE,
+        session,
+      );
+      if (!wallet) throw new AppError("Mentee wallet not found", 404);
+      if (wallet.balance < totalAmount)
+        throw new AppError(
+          `Insufficient balance. You have ${wallet.balance} tokens but need ${totalAmount}`,
+          400,
+        );
+      wallet.balance -= totalAmount;
+      wallet.escrow += totalAmount;
+      await walletRepository.save(wallet, session);
+      await transactionRepository.createMany(
+        [
+          {
+            user: menteeId,
+            type: "escrow_hold",
+            amount: totalAmount,
+            connectRequest: connectRequestId,
+            description: `Escrow hold — additional session × ${rate} tokens + ${activeCommissionRate}% platform fee`,
+            balanceAfter: wallet.balance,
+          },
+        ],
+        session,
+      );
+      return { balance: wallet.balance, escrow: wallet.escrow };
+    });
+    await workspaceClient.updatePaymentState(
+      connectRequestId,
+      {
+        additionalSlotId,
+        paymentStatus: "paid",
+        paidAt: new Date(),
+        sessionRate: rate,
+        totalAmount,
+        selectedSlot: {
+          day: additionalSlot.day || "",
+          date: additionalSlot.date,
+          startTime: additionalSlot.startTime,
+          endTime: additionalSlot.endTime,
+          meetingLink: additionalSlot.meetingLink || "",
+          menteeMarked: false,
+          mentorMarked: false,
+          completedAt: null,
+          status: "booked",
+        },
+      },
+      correlationId,
+    );
+    return {
+      sessionRate: rate,
+      platformFee: fee,
+      totalAmount,
+      commissionRate: activeCommissionRate,
+      slotId: additionalSlotId,
+      ...local,
+    };
+  };
+
+  const release = async ({ requestId, menteeId, correlationId }) => {
+    const key = `workspace-session-release:${idOf(requestId)}`;
+    const context = await getContext(requestId, correlationId);
+    if (idOf(context.mentee) !== idOf(menteeId))
+      throw new AppError("Only the mentee can confirm session completion", 403);
+    const existing = await transactionRepository.findEscrowReleaseByKey(key);
+    if (existing) {
+      if (idOf(existing.user) !== idOf(menteeId)) {
+        throw new AppError(
+          "Only the mentee can confirm session completion",
+          403,
+        );
+      }
+      const result = existing.releaseResult || {
+        status: "completed",
+        alreadyReleased: true,
+        totalAmount: Number(existing.amount || 0),
+      };
+      await workspaceClient.updatePaymentState(
+        requestId,
+        {
+          status: "completed",
+          completedAt: result.completedAt || new Date(),
+        },
+        correlationId,
+      );
+      return result;
+    }
+    if (context.status === "completed")
+      return {
+        status: "completed",
+        alreadyReleased: true,
+        totalAmount: Number(context.totalAmount || 0),
+      };
+    if (context.status !== "ongoing")
+      throw new AppError(
+        `Release only allowed on ongoing sessions. Current status: ${context.status}`,
+        400,
+      );
+    if (context.paymentStatus !== "paid")
+      throw new AppError("No escrowed payment found for this session", 400);
+    const total = Number(context.totalAmount || 0);
+    const mentorPayout = Number(context.mentorPayout || total);
+    const commissionAmount = Number(
+      context.commissionAmount || Math.max(0, total - mentorPayout),
+    );
+    let response;
+    try {
+      response = await runInTransaction(async (session) => {
+        // MongoDB transactions must not run parallel operations on the same
+        // session. Read the two wallets sequentially before updating them.
+        const menteeWallet = await walletRepository.findByUserIdAndRole(
+          menteeId,
+          ROLE_MENTEE,
+          session,
+        );
+        const mentorWallet = await walletRepository.findByUserIdAndRole(
+          context.mentor,
+          ROLE_MENTOR,
+          session,
+        );
+        if (!menteeWallet || !mentorWallet)
+          throw new AppError("Required wallet not found", 404);
+        if (menteeWallet.escrow < total)
+          throw new AppError("Escrow balance mismatch. Contact support.", 400);
+        menteeWallet.escrow -= total;
+        mentorWallet.balance += mentorPayout;
+        await walletRepository.save(menteeWallet, session);
+        await walletRepository.save(mentorWallet, session);
+        const result = {
+          totalAmount: total,
+          commissionRate: context.commissionRate ?? commissionRate,
+          commissionAmount,
+          mentorPayout,
+          menteeEscrow: menteeWallet.escrow,
+          mentorBalance: mentorWallet.balance,
+          status: "completed",
+          completedAt: new Date(),
+        };
+        await transactionRepository.createMany(
+          [
+            {
+              user: menteeId,
+              type: "escrow_release",
+              amount: total,
+              connectRequest: requestId,
+              idempotencyKey: key,
+              releaseResult: result,
+              description: "Escrow released on session completion",
+              balanceAfter: menteeWallet.escrow,
+            },
+            {
+              user: context.mentor,
+              type: "commission_deduct",
+              amount: commissionAmount,
+              connectRequest: requestId,
+              description: `Platform fee (${context.commissionRate ?? commissionRate}%) collected`,
+              balanceAfter: mentorWallet.balance,
+            },
+            {
+              user: context.mentor,
+              type: "mentor_payout",
+              amount: mentorPayout,
+              connectRequest: requestId,
+              description: "Session payout — full rate received",
+              balanceAfter: mentorWallet.balance,
+            },
+          ],
+          session,
+        );
+        return result;
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        const raced = await transactionRepository.findEscrowReleaseByKey(key);
+        if (raced && idOf(raced.user) === idOf(menteeId)) {
+          const result = raced.releaseResult || {
+            status: "completed",
+            alreadyReleased: true,
+            totalAmount: Number(raced.amount || 0),
+          };
+          await workspaceClient.updatePaymentState(
+            requestId,
+            {
+              status: "completed",
+              completedAt: result.completedAt || new Date(),
+            },
+            correlationId,
+          );
+          return result;
+        }
+      }
+      throw error;
+    }
+    await workspaceClient.updatePaymentState(
+      requestId,
+      { status: "completed", completedAt: response.completedAt },
+      correlationId,
+    );
+    return response;
+  };
+
+  const refund = async ({ requestId, userId, correlationId }) => {
+    const context = await getContext(requestId, correlationId);
+    requireParticipant(context, userId);
+    if (context.paymentStatus !== "paid")
+      throw new AppError("No paid escrow found to refund", 400);
+    if (context.status === "completed")
+      throw new AppError("Cannot refund a completed session", 400);
+    const total = Number(context.totalAmount || 0);
+    const local = await runInTransaction(async (session) => {
+      const wallet = await walletRepository.findByUserIdAndRole(
+        context.mentee,
+        ROLE_MENTEE,
+        session,
+      );
+      if (!wallet) throw new AppError("Mentee wallet not found", 404);
+      if (wallet.escrow < total)
+        throw new AppError("Escrow balance mismatch. Contact support.", 400);
+      wallet.escrow -= total;
+      wallet.balance += total;
+      await walletRepository.save(wallet, session);
+      await transactionRepository.createMany(
+        [
+          {
+            user: context.mentee,
+            type: "escrow_refund",
+            amount: total,
+            connectRequest: requestId,
+            description: "Full refund — session cancelled (incl. platform fee)",
+            balanceAfter: wallet.balance,
+          },
+        ],
+        session,
+      );
+      return { balance: wallet.balance, escrow: wallet.escrow };
+    });
+    await workspaceClient.updatePaymentState(
+      requestId,
+      { paymentStatus: "refunded", status: "rejected" },
+      correlationId,
+    );
+    return {
+      totalAmount: total,
+      ...local,
+      status: "rejected",
+      paymentStatus: "refunded",
+    };
+  };
+
+  const adminRefund = async ({ requestId, correlationId }) => {
+    const context = await getContext(requestId, correlationId);
+    if (context.paymentStatus !== "paid")
+      throw new AppError("No paid escrow found to refund", 400);
+    if (context.status === "completed")
+      throw new AppError("Cannot refund a completed session", 400);
+    const total = Number(context.totalAmount || 0);
+    const local = await runInTransaction(async (session) => {
+      const wallet = await walletRepository.findByUserIdAndRole(
+        context.mentee,
+        ROLE_MENTEE,
+        session,
+      );
+      if (!wallet) throw new AppError("Mentee wallet not found", 404);
+      if (wallet.escrow < total)
+        throw new AppError("Escrow balance mismatch. Contact support.", 400);
+      wallet.escrow -= total;
+      wallet.balance += total;
+      await walletRepository.save(wallet, session);
+      await transactionRepository.createMany(
+        [
+          {
+            user: context.mentee,
+            type: "escrow_refund",
+            amount: total,
+            connectRequest: requestId,
+            description: "Admin refund — report resolved",
+            balanceAfter: wallet.balance,
+          },
+        ],
+        session,
+      );
+      return { balance: wallet.balance, escrow: wallet.escrow };
+    });
+    await workspaceClient.updatePaymentState(
+      requestId,
+      { paymentStatus: "refunded", status: "rejected" },
+      correlationId,
+    );
+    return {
+      totalAmount: total,
+      ...local,
+      status: "rejected",
+      paymentStatus: "refunded",
+    };
+  };
+
+  const getStatus = async ({ requestId, userId, correlationId }) => {
+    const context = await getContext(requestId, correlationId);
+    requireParticipant(context, userId);
+    const activeCommissionRate = await getCommissionRate();
+    const wallet = await walletRepository.findByUserIdAndRole(
+      context.mentee,
+      ROLE_MENTEE,
+    );
+    return {
+      status: context.status,
+      paymentStatus: context.paymentStatus,
+      sessionRate: context.sessionRate ?? null,
+      sessionCount:
+        context.sessionCount ?? (context.selectedSlots?.length || null),
+      totalAmount: context.totalAmount ?? null,
+      paidAt: context.paidAt,
+      completedAt: context.completedAt,
+      confirmedSlot: context.confirmedSlot,
+      commissionRate: activeCommissionRate,
+      wallet: wallet
+        ? { balance: wallet.balance, escrow: wallet.escrow }
+        : null,
+    };
+  };
+
+  return { pay, payAdditional, release, refund, adminRefund, getStatus };
+};
+
+module.exports = createEscrowService;

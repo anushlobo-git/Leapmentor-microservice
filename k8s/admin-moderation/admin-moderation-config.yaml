@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: admin-moderation-config
+  namespace: leapmentor
+data:
+  NODE_ENV: production
+  PORT: "5006"
+  MONGO_URI: mongodb://mongo-0.mongo.leapmentor.svc.cluster.local:27017/leapmentor_shared?replicaSet=rs0
+  MONGO_SERVER_SELECTION_TIMEOUT_MS: "5000"
+  REDIS_URL: redis://redis:6379
+  IDENTITY_SERVICE_URL: http://identity-access:5001
+  PROFILE_SERVICE_URL: http://profile-discovery:5002
+  WORKSPACE_SERVICE_URL: http://mentoring-workspace:5003
+  PAYMENTS_SERVICE_URL: http://payments:5004
+  INTERNAL_HTTP_TIMEOUT_MS: "3000"

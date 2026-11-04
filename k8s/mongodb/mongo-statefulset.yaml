@@ -1,0 +1,102 @@
+#A Deployment's Pods do have unique names. However, Kubernetes doesn't guarantee that a replacement Pod will get the same name.
+#Deployment:
+#- Original: backend-7d8f9-x2abc
+#- Recreated: backend-7d8f9-k8pqr
+#StatefulSet:
+#- Original: mongo-0
+#- Recreated: mongo-0
+
+#we choose statefulset because It maintains a stable association between each Pod and its persistent storage.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: leapmentor
+  labels:
+    app.kubernetes.io/name: mongo
+    app.kubernetes.io/component: database
+spec:
+  serviceName: mongo
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mongo
+        app.kubernetes.io/component: database
+    spec:
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: mongodb
+          image: mongo:7
+          imagePullPolicy: IfNotPresent
+          command:
+            - mongod
+            - --replSet
+            - rs0
+            - --bind_ip_all
+          ports:
+            - name: mongodb
+              containerPort: 27017
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --host
+                - 127.0.0.1
+                - --eval
+                - "quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)"
+            # MongoDB may take several seconds to recover WiredTiger data and
+            # elect the single replica-set member on a local Minikube node.
+            timeoutSeconds: 15
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --host
+                - 127.0.0.1
+                - --eval
+                - "quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)"
+            periodSeconds: 10
+            timeoutSeconds: 15
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --host
+                - 127.0.0.1
+                - --eval
+                - "try { quit(rs.status().members.some((member) => member.stateStr === 'PRIMARY') ? 0 : 1); } catch (error) { quit(1); }"
+            periodSeconds: 5
+            timeoutSeconds: 15
+            failureThreshold: 12
+  volumeClaimTemplates:
+    - metadata:
+        name: mongo-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

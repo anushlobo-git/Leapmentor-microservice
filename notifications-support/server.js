@@ -1,0 +1,73 @@
+const http = require("node:http");
+
+const createApp = require("./app");
+const container = require("./container");
+const env = require("./config/env");
+
+const app = createApp(container);
+const httpServer = http.createServer(app);
+
+let server;
+let emailRetryTimer;
+
+const startServer = async () => {
+  const connected = await container.database.connectDatabase();
+  if (!connected)
+    process.stderr.write(
+      "MONGO_URI is not configured; Notifications will remain not ready\n",
+    );
+  await container.notificationConsumer.start();
+  if (connected) {
+    container.sessionReminderService?.start();
+    await container.reportEmailService
+      ?.drainPendingEmailEvents()
+      .catch((error) => {
+        process.stderr.write(`Email recovery failed: ${error.message}\n`);
+      });
+    emailRetryTimer = setInterval(() => {
+      container.reportEmailService?.drainPendingEmailEvents().catch((error) => {
+        process.stderr.write(`Email retry failed: ${error.message}\n`);
+      });
+    }, 30000);
+    emailRetryTimer.unref?.();
+  }
+  server = httpServer.listen(env.port, () => {
+    process.stdout.write(
+      `${env.serviceName} service listening on port ${env.port}\n`,
+    );
+  });
+};
+
+startServer().catch((error) => {
+  process.stderr.write(
+    `Notifications database startup failed: ${error.message}\n`,
+  );
+  process.exitCode = 1;
+});
+
+const shutdown = (signal) => {
+  process.stdout.write(`${signal} received; shutting down\n`);
+
+  if (!server) return process.exit(0);
+  if (emailRetryTimer) clearInterval(emailRetryTimer);
+  container.sessionReminderService?.stop();
+  server.close((error) => {
+    container.notificationConsumer.stop().catch((stopError) => {
+      process.stderr.write(`${stopError.message}\n`);
+    });
+    container.database.closeDatabase().catch((closeError) => {
+      process.stderr.write(`${closeError.message}\n`);
+      process.exitCode = 1;
+    });
+    container.notificationEventRedisClient?.quit().catch(() => null);
+    if (error) {
+      process.stderr.write(`${error.message}\n`);
+      process.exitCode = 1;
+    }
+
+    process.exit();
+  });
+};
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leapmentor
+  namespace: leapmentor
+  labels:
+    app.kubernetes.io/name: leapmentor
+    app.kubernetes.io/component: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 12m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  # Add the real public hostname to tls.hosts and rules.host after DNS is
+  # configured. The TLS secret must contain a certificate for that hostname.
+  tls:
+    - secretName: leapmentor-tls
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
