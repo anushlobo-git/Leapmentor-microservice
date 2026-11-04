@@ -62,6 +62,9 @@ spec:
                 - 127.0.0.1
                 - --eval
                 - "quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)"
+            # MongoDB may take several seconds to recover WiredTiger data and
+            # elect the single replica-set member on a local Minikube node.
+            timeoutSeconds: 15
             failureThreshold: 30
             periodSeconds: 5
           livenessProbe:
@@ -74,8 +77,8 @@ spec:
                 - --eval
                 - "quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)"
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            timeoutSeconds: 15
+            failureThreshold: 6
           readinessProbe:
             exec:
               command:
@@ -86,8 +89,8 @@ spec:
                 - --eval
                 - "try { quit(rs.status().members.some((member) => member.stateStr === 'PRIMARY') ? 0 : 1); } catch (error) { quit(1); }"
             periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 6
+            timeoutSeconds: 15
+            failureThreshold: 12
   volumeClaimTemplates:
     - metadata:
         name: mongo-data

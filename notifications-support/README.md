@@ -79,5 +79,5 @@ npm test
 Build this service's standalone image from the repository's `services` folder:
 
 ```bash
-docker build -f notifications-support/Dockerfile -t leapmentor/notifications-support:local notifications-support
+docker build -f notifications-support/Dockerfile -t leapmentor-local-notifications-support:latest notifications-support
 ```

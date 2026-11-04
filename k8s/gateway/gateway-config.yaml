@@ -205,29 +205,14 @@ data:
                 return 404;
             }
 
-            location ^~ /services/identity-access/ {
-                proxy_pass http://identity_access/;
+            # Internal service proxy paths are deliberately not exposed through
+            # the public gateway. Service-to-service traffic uses ClusterIP DNS.
+            location = /services {
+                return 404;
             }
 
-            location ^~ /services/profile-discovery/ {
-                proxy_pass http://profile_discovery/;
-            }
-
-            location ^~ /services/mentoring-workspace/ {
-                proxy_pass http://mentoring_workspace/;
-                proxy_read_timeout 3600s;
-            }
-
-            location ^~ /services/payments/ {
-                proxy_pass http://payments/;
-            }
-
-            location ^~ /services/notifications-support/ {
-                proxy_pass http://notifications_support/;
-            }
-
-            location ^~ /services/admin-moderation/ {
-                proxy_pass http://admin_moderation/;
+            location ^~ /services/ {
+                return 404;
             }
 
             location / {

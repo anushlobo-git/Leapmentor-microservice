@@ -83,5 +83,5 @@ npm test
 Build this service's standalone image from the repository's `services` folder:
 
 ```bash
-docker build -f admin-moderation/Dockerfile -t leapmentor/admin-moderation:local admin-moderation
+docker build -f admin-moderation/Dockerfile -t leapmentor-local-admin-moderation:latest admin-moderation
 ```

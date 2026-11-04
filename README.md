@@ -110,11 +110,15 @@ configured later and will not be exposed directly to the browser.
 
 Each backend service has its own multi-stage `Dockerfile` and `.dockerignore`
 inside its service directory. The frontend has its own multi-stage Dockerfile
-and unprivileged Nginx runtime. Build all seven standalone images with:
+and unprivileged Nginx runtime. Build all seven application images through the
+workspace Compose configuration:
 
 ```bash
-./build-images.sh
+docker compose build
 ```
+
+The Compose file assigns the same deterministic image names used by the
+Kubernetes Deployments, such as `leapmentor-local-payments:latest`.
 
 Each service now has a dedicated `.env.example`; copy it to that service's
 ignored `.env` before using `start-local.sh`, or run

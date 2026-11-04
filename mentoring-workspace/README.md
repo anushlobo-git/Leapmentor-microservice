@@ -92,5 +92,5 @@ npm test
 Build this service's standalone image from the repository's `services` folder:
 
 ```bash
-docker build -f mentoring-workspace/Dockerfile -t leapmentor/mentoring-workspace:local mentoring-workspace
+docker build -f mentoring-workspace/Dockerfile -t leapmentor-local-mentoring-workspace:latest mentoring-workspace
 ```

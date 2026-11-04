@@ -100,5 +100,5 @@ npm test
 Build this service's standalone image from the repository's `services` folder:
 
 ```bash
-docker build -f payments/Dockerfile -t leapmentor/payments:local payments
+docker build -f payments/Dockerfile -t leapmentor-local-payments:latest payments
 ```

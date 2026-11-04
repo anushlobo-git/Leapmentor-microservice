@@ -85,5 +85,5 @@ npm test
 Build this service's standalone image from the repository's `services` folder:
 
 ```bash
-docker build -f profile-discovery/Dockerfile -t leapmentor/profile-discovery:local profile-discovery
+docker build -f profile-discovery/Dockerfile -t leapmentor-local-profile-discovery:latest profile-discovery
 ```

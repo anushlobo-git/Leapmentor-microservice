@@ -85,5 +85,5 @@ npm test
 Build this service's standalone image from the repository's `services` folder:
 
 ```bash
-docker build -f identity-access/Dockerfile -t leapmentor/identity-access:local identity-access
+docker build -f identity-access/Dockerfile -t leapmentor-local-identity-access:latest identity-access
 ```
