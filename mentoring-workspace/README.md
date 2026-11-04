@@ -31,11 +31,18 @@ Authenticated browser-facing routes use `/api/v1`:
 | `/slot-locks` | Lock/unlock slots, unlock all locks for a user, and read a mentor's active locks |
 | `/sessions` | Read slots; set meeting links; mark completion; add, cancel, or reschedule slots |
 | `/messages` | Read a connect request's message history and unread count |
+| `/goals`, `/feedback`, `/reports` | Manage mentoring goals, feedback, and reports |
 | `/private-notes` | Create, list, update, and delete the caller's private text notes |
+| `/notes` | Upload (multipart, 10 MB), list shared or private notes, and delete a file note |
+
 Trusted internal routes use `/internal/v1` and require service authentication.
-They expose availability blockers, payment context/state, and the user,
-engagement, and report data needed by Admin & Moderation.
-| `/notes` | Upload (multipart, 10 MB), list shared, list private, and delete shared file notes |
+They expose availability blockers, payment/finance context, reminder data, and
+the user, engagement, payment, and report projections needed by other
+services and Admin & Moderation.
+
+The service also exposes `GET /health/live` and `GET /health/ready`.
+Readiness depends on its required data services; liveness only checks that the
+process is responding.
 
 ## Project structure
 
@@ -69,9 +76,10 @@ npm run dev
 
 The local default port is `5003`. MongoDB is required for persistence. Redis
 Streams and the Notifications URL/token configure asynchronous notification
-delivery; use the matching shared access-token and internal-service
-configuration across services. See [`.env.example`](./.env.example) for all
-settings. Do not commit `.env` or real credentials.
+delivery; Redis also supports the Socket.IO adapter when enabled. Use matching
+JWT and internal-service credentials across the services that communicate.
+See [`.env.example`](./.env.example) for the environment contract. Do not
+commit `.env` or real credentials.
 
 Shared file notes also need `IDENTITY_SERVICE_URL`, `IDENTITY_SERVICE_TOKEN`
 (equal to the `WORKSPACE_SERVICE_TOKEN` in Identity's `.env`) and

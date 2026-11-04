@@ -27,7 +27,12 @@ Browser-facing routes use `/api/v1`:
 
 Trusted notification creation uses `POST /internal/v1/notifications` and
 requires internal service authentication. Stream delivery is asynchronous and
-uses the configured stream and consumer-group settings.
+uses the configured Redis Stream and consumer-group settings. The service
+also exposes internal email-event endpoints under `/internal/v1/email-events`.
+
+The service exposes `GET /health/live` and `GET /health/ready`. Readiness
+depends on its database state; liveness only checks that the process is
+responding.
 
 ## Project structure
 
@@ -62,8 +67,8 @@ The local default port is `5005`. MongoDB stores notification and support
 records. Set `REDIS_ENABLED` and the stream configuration for event consumption.
 Set `GROQ_API_KEY` to use AI chat. Configure the `SMTP_*` variables for email
 delivery and the Admin service URL/token for administrator session validation.
-See [`.env.example`](./.env.example) for all settings; do not commit `.env` or
-real credentials.
+See [`.env.example`](./.env.example) for the environment contract; do not
+commit `.env` or real credentials.
 
 Run the tests with:
 

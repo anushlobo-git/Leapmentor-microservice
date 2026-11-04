@@ -23,8 +23,9 @@ state changes it needs through Workspace's internal API.
 - Persist transactions and idempotency records to protect payment operations
   against duplicate requests.
 
-The cross-service financial lifecycle is not yet backed by a durable outbox
-and reconciliation process; review that boundary before production use.
+Workspace remains the owner of connect-request and session state. Payments
+uses Workspace's internal API for the payment context and state transitions;
+it does not import Workspace persistence models.
 
 ## API
 
@@ -41,9 +42,10 @@ Browser-facing routes use `/api/v1/escrow` and require authentication:
 | `GET /commission-rate`     | Read the configured commission rate  |
 
 Invoice and mentor earnings routes are mounted at `/api/v1/invoices` and
-`/api/v1/mentor/earnings`. Leap Request browser paths are mounted at
-`/api/v1/leap-requests`; protected admin operations are fronted by Admin &
-Moderation.
+`/api/v1/mentor/earnings`. Earnings includes summary, chart, payout-history,
+and withdrawal operations. Leap Request browser paths are mounted at
+`/api/v1/leap-requests` for mentee create/read operations; protected review
+operations are exposed through Admin & Moderation.
 
 Trusted internal routes use `/internal/v1` and require service authentication:
 
@@ -52,6 +54,10 @@ Trusted internal routes use `/internal/v1` and require service authentication:
 | `/wallets`   | Provision wallets                  |
 | `/settings`  | Read or update commission          |
 | `/refunds`   | Process an internal refund request |
+
+The service also exposes `GET /health/live` and `GET /health/ready`.
+Readiness depends on database state; liveness only checks that the process is
+responding.
 
 ## Project structure
 
@@ -82,9 +88,10 @@ npm run dev
 ```
 
 The local default port is `5004`. Use the same access-token signing secret as
-Identity & Access and configure the Workspace internal URL and token. See
-[`.env.example`](./.env.example) for all settings. Do not commit `.env` or real
-credentials.
+Identity & Access and configure the Workspace internal URL and shared internal
+service token. The commission seed command is `npm run seed:commission`.
+See [`.env.example`](./.env.example) for the environment contract. Do not
+commit `.env` or real credentials.
 
 Run the tests with:
 

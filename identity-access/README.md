@@ -18,6 +18,11 @@ repositories.
   blocking, and dashboard-statistics operations.
 - Wallet provisioning through Payments during account registration.
 
+Identity owns account identity; profile and mentoring domain records remain
+owned by their respective services. Shared JWT verification and internal
+service credentials must be configured consistently across the services that
+call Identity.
+
 ## API
 
 Browser-facing routes use `/api/v1`:
@@ -37,6 +42,10 @@ service authentication:
 | `/users` | Search users and retrieve a user summary |
 | `/admin/users` | List/read users and block or unblock an account |
 | `/admin` | Admin-facing user growth and statistics |
+
+The service also exposes `GET /health/live` and `GET /health/ready`. Readiness
+depends on the service's database state; liveness only checks that the process
+is responding.
 
 ## Project structure
 
@@ -68,8 +77,9 @@ npm run dev
 
 The local default port is `5001`. Google and LinkedIn credentials are optional
 unless those sign-in flows are being tested. Configure SMTP for verification
-and password-reset email delivery. See [`.env.example`](./.env.example) for all
-settings; do not commit `.env` or real credentials.
+and password-reset email delivery, and configure Payments connectivity for
+wallet provisioning. See [`.env.example`](./.env.example) for the environment
+contract; do not commit `.env` or real credentials.
 
 Run the tests with:
 

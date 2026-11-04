@@ -31,10 +31,13 @@ All browser-facing routes use `/api/v1`:
 | `/admin/settings` | Settings overview, add an admin, change password, read or update commission |
 | `/admin/mentor-verifications` | List and read verification requests; verify or revoke a mentor |
 | `/admin/reports` | Report statistics and listing; update a report, process a refund, or delete its session |
+| `/admin/payments` | Payment statistics, revenue chart, and transaction listing |
+| `/leap-requests`, `/admin/leap-requests` | List Leap Requests and approve or reject them |
 
 The dashboard, user, settings, verification, and report routes require a
-readiness check; protected operations also enforce administrator authentication
-and route-specific validation.
+readiness check; protected operations also enforce administrator authentication and
+route-specific validation. The service also exposes `GET /health/live` and
+`GET /health/ready`; readiness depends on database state.
 
 ## Project structure
 
@@ -66,8 +69,10 @@ npm run dev
 
 The local default port is `5006`. Configure the Identity, Profile, Workspace,
 and Payments service URLs and shared internal-service credentials in `.env`
-when exercising cross-service admin operations. See [`.env.example`](./.env.example)
-for the full configuration contract. Do not commit `.env` or real credentials.
+when exercising cross-service admin operations. The `npm run seed:admin`
+script provisions the configured initial administrator. See
+[`.env.example`](./.env.example) for the environment contract. Do not commit
+`.env` or real credentials.
 
 Run the tests with:
 

@@ -35,8 +35,14 @@ Browser-facing routes use `/api/v1`:
 
 The profile, availability, search, and upload operations use Identity-backed
 authentication where applicable. Mentor schedule edits require the mentor
-role. Internal admin routes use `/internal/v1/admin` and require service
-authentication.
+role. Google Calendar authorization/callback routes are mounted under the
+same prefix. Internal admin/profile/verification routes use
+`/internal/v1/admin`; internal mentor lookup and rating routes use
+`/internal/v1/mentors`. These internal routes require service authentication.
+
+The service also exposes `GET /health/live` and `GET /health/ready`. Readiness
+depends on database state; liveness only checks that the process is
+responding.
 
 ## Project structure
 
@@ -66,10 +72,11 @@ npm ci
 npm run dev
 ```
 
-The local default port is `5002`. Cloudinary credentials are needed for
-provider-backed uploads; Google OAuth credentials are needed for Calendar
-integration. See [`.env.example`](./.env.example) for the complete configuration
-contract. Do not commit `.env` or real credentials.
+The local default port is `5002`. The service calls Identity for user
+information and Mentoring Workspace for slot blockers. Cloudinary credentials
+are needed for provider-backed uploads; Google OAuth credentials are needed
+for Calendar integration. See [`.env.example`](./.env.example) for the
+complete configuration contract. Do not commit `.env` or real credentials.
 
 Run the tests with:
 
