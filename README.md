@@ -2,9 +2,6 @@
 
 This repository contains the independently deployable LeapMentor services.
 
-The existing monolith remains in `../Leapmentor-backend` and the frontend remains
-in `../Leapmentor-frontend`. Those folders keep their own Git repositories.
-
 ## Planned services
 
 - `identity-access/`
