@@ -7,9 +7,23 @@ test("publishes an idempotent notification command with correlation and event he
   const calls = [];
   const client = createNotificationClient({
     serviceToken: "workspace-token",
-    httpClient: { request: async (request) => { calls.push(request); return { data: { deduplicated: false } }; } },
+    httpClient: {
+      request: async (request) => {
+        calls.push(request);
+        return { data: { deduplicated: false } };
+      },
+    },
   });
-  const result = await client.publish({ sourceEventId: "event-1", recipient: "user-1", type: "new_message", title: "New message", message: "Hello" }, "correlation-1");
+  const result = await client.publish(
+    {
+      sourceEventId: "event-1",
+      recipient: "user-1",
+      type: "new_message",
+      title: "New message",
+      message: "Hello",
+    },
+    "correlation-1",
+  );
   assert.equal(result.delivered, true);
   assert.equal(calls[0].path, "/internal/v1/notifications");
   assert.equal(calls[0].correlationId, "correlation-1");
@@ -19,7 +33,11 @@ test("publishes an idempotent notification command with correlation and event he
 test("fails open when notification service delivery is unavailable", async () => {
   const client = createNotificationClient({
     serviceToken: "workspace-token",
-    httpClient: { request: async () => { throw new Error("service down"); } },
+    httpClient: {
+      request: async () => {
+        throw new Error("service down");
+      },
+    },
   });
   const result = await client.publish({ sourceEventId: "event-1" });
   assert.equal(result.delivered, false);
@@ -30,7 +48,12 @@ test("falls back to REST when Redis is enabled but not ready", async () => {
   const client = createNotificationClient({
     serviceToken: "workspace-token",
     streamPublisher: { publish: async () => ({ delivered: false, skipped: true }) },
-    httpClient: { request: async (request) => { calls.push(request); return { data: { deduplicated: false } }; } },
+    httpClient: {
+      request: async (request) => {
+        calls.push(request);
+        return { data: { deduplicated: false } };
+      },
+    },
   });
   const result = await client.publish({ sourceEventId: "event-1" });
   assert.equal(result.delivered, true);
@@ -45,7 +68,12 @@ test("queues events in the outbox, generates missing event IDs, and marks delive
     outboxRepository: {
       enqueue: async (event) => {
         operations.push(["enqueue", event]);
-        return { _id: "outbox-1", payload: event.payload, correlationId: event.correlationId, attempts: 1 };
+        return {
+          _id: "outbox-1",
+          payload: event.payload,
+          correlationId: event.correlationId,
+          attempts: 1,
+        };
       },
       markDelivered: async (id) => operations.push(["delivered", id]),
     },
@@ -95,7 +123,13 @@ test("marks events failed when token is missing or REST delivery throws", async 
 
   const failed = createNotificationClient({
     serviceToken: "token",
-    httpClient: { request: async () => { const error = new Error("failed"); error.code = "HTTP_503"; throw error; } },
+    httpClient: {
+      request: async () => {
+        const error = new Error("failed");
+        error.code = "HTTP_503";
+        throw error;
+      },
+    },
     outboxRepository,
   });
   const result = await failed.publish({ sourceEventId: "failure" });
@@ -121,21 +155,37 @@ test("prefers successful stream delivery and falls back after stream errors", as
   assert.deepEqual(streamResult, { delivered: true, stream: true });
   assert.deepEqual(calls[0], ["delivered", "outbox-stream"]);
 
-  const stderrWrite = process.stderr.write;
-  const errors = [];
-  process.stderr.write = (message) => { errors.push(String(message)); return true; };
+  const stdoutWrite = process.stdout.write;
+  const logLines = [];
+  process.stdout.write = (message) => {
+    logLines.push(String(message));
+    return true;
+  };
   try {
     const client = createNotificationClient({
       serviceToken: "token",
-      streamPublisher: { publish: async () => { throw new Error("stream unavailable"); } },
+      streamPublisher: {
+        publish: async () => {
+          throw new Error("stream unavailable");
+        },
+      },
       httpClient: { request: async () => ({}) },
       outboxRepository,
     });
     const result = await client.publish({ sourceEventId: "fallback" });
     assert.equal(result.delivered, true);
-    assert.equal(errors.some((message) => message.includes("stream unavailable")), true);
+    assert.equal(
+      logLines.some((line) => {
+        const entry = JSON.parse(line);
+        return (
+          entry.message === "Notification stream publish failed" &&
+          entry.error.message === "stream unavailable"
+        );
+      }),
+      true,
+    );
   } finally {
-    process.stderr.write = stderrWrite;
+    process.stdout.write = stdoutWrite;
   }
 });
 
@@ -143,8 +193,12 @@ test("drains pending outbox events and rejects overlapping drains", async () => 
   const marks = [];
   let releaseDelivery;
   let startedDelivery;
-  const started = new Promise((resolve) => { startedDelivery = resolve; });
-  const waiting = new Promise((resolve) => { releaseDelivery = resolve; });
+  const started = new Promise((resolve) => {
+    startedDelivery = resolve;
+  });
+  const waiting = new Promise((resolve) => {
+    releaseDelivery = resolve;
+  });
   const client = createNotificationClient({
     serviceToken: "token",
     httpClient: {

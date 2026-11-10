@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 
 const AppError = require("../utils/AppError");
 const { toWalletDTO } = require("../utils/wallet.mapper");
+const structuredLogger = require("../utils/logger");
 
 const ROLE_MENTEE = "mentee";
 const ROLE_MENTOR = "mentor";
@@ -19,7 +20,7 @@ const createWalletService = ({
   transactionRepository,
   idempotencyRepository,
   runInTransaction,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const normalizeRoles = (roles) => {
     if (!Array.isArray(roles) || roles.length === 0) {

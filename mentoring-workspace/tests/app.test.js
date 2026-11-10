@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const express = require("express");
 
 const createApp = require("../app");
+const logger = require("../utils/logger");
 
 const request = async (server, path, headers) => {
   const { port } = server.address();
@@ -47,6 +48,64 @@ test("health endpoints, root response, correlation IDs, and readiness states", a
   } finally {
     await close(readyServer);
   }
+});
+
+test("writes JSON request logs with service and trace IDs", async () => {
+  const connectRequestRouter = express.Router();
+  connectRequestRouter.get("/probe", (_req, res) => {
+    logger.info("Application event");
+    res.sendStatus(200);
+  });
+  const server = await start(
+    createApp({
+      health: { isReady: () => true },
+      connectRequestRouter,
+    }),
+  );
+  const originalWrite = process.stdout.write;
+  const logLines = [];
+  process.stdout.write = (message) => {
+    logLines.push(String(message));
+    return true;
+  };
+
+  try {
+    const response = await request(server, "/api/v1/connect-requests/probe", {
+      "X-Correlation-ID": "trace-app-test",
+    });
+    assert.equal(response.status, 200);
+  } finally {
+    process.stdout.write = originalWrite;
+    await close(server);
+  }
+
+  const entry = logLines
+    .filter((line) => line.startsWith('{"method":'))
+    .map((line) => JSON.parse(line))
+    .find((log) => log.message === "HTTP request completed");
+  const applicationEvent = logLines
+    .filter((line) => line.startsWith('{"timestamp":'))
+    .map((line) => JSON.parse(line))
+    .find((log) => log.message === "Application event");
+  assert.equal(applicationEvent.traceId, "trace-app-test");
+  assert.deepEqual(
+    {
+      level: entry.level,
+      service: entry.service,
+      traceId: entry.traceId,
+      method: entry.method,
+      path: entry.path,
+      statusCode: entry.statusCode,
+    },
+    {
+      level: "info",
+      service: "mentoring-workspace",
+      traceId: "trace-app-test",
+      method: "GET",
+      path: "/api/v1/connect-requests/probe",
+      statusCode: 200,
+    },
+  );
 });
 
 test("mounts each internal and public router behind its expected prefix", async () => {

@@ -1,4 +1,5 @@
 const AppError = require("../utils/AppError");
+const structuredLogger = require("../utils/logger");
 
 const COMPLAINT_TYPES = new Set([
   "inappropriate_behavior",
@@ -15,7 +16,7 @@ const createReportService = ({
   cloudinaryClient,
   identityClient,
   notificationClient,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const createIncidentReport = async ({
     userId,

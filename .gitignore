@@ -6,6 +6,7 @@ node_modules/
 .env.*
 !.env.example
 !**/.env.example
+/k8s/monitoring/grafana/secret.yaml
 
 # Logs and runtime output
 *.log

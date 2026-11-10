@@ -3,6 +3,7 @@ const http = require("node:http");
 const createApp = require("./app");
 const container = require("./container");
 const env = require("./config/env");
+const logger = require("./utils/logger");
 
 const app = createApp(container);
 const httpServer = http.createServer(app);
@@ -13,24 +14,20 @@ const startServer = async () => {
   try {
     const connected = await container.database.connectDatabase();
     if (!connected) {
-      process.stderr.write(
-        "MONGO_URI is not configured; Payments will remain not ready\n",
-      );
+      logger.warn("MONGO_URI is not configured; Payments will remain not ready");
     }
 
     server = httpServer.listen(env.port, () => {
-      process.stdout.write(
-        `${env.serviceName} service listening on port ${env.port}\n`,
-      );
+      logger.info("Service listening", { port: env.port });
     });
   } catch (error) {
-    process.stderr.write(`Payments database startup failed: ${error.message}\n`);
+    logger.error("Payments database startup failed", { error });
     process.exitCode = 1;
   }
 };
 
 const shutdown = (signal) => {
-  process.stdout.write(`${signal} received; shutting down\n`);
+  logger.info("Shutdown signal received", { signal });
 
   if (!server) {
     process.exit(0);
@@ -40,12 +37,12 @@ const shutdown = (signal) => {
     container.database
       .closeDatabase()
       .catch((closeError) => {
-        process.stderr.write(`${closeError.message}\n`);
+        logger.error("Database shutdown failed", { error: closeError });
         process.exitCode = 1;
       })
       .finally(() => {
         if (error) {
-          process.stderr.write(`${error.message}\n`);
+          logger.error("HTTP server shutdown failed", { error });
           process.exitCode = 1;
         }
         process.exit();

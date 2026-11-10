@@ -1,10 +1,12 @@
+const structuredLogger = require("../utils/logger");
+
 const configureRedisAdapter = async ({
   io,
   enabled,
   url,
   createClient,
   createAdapter,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   if (!enabled) return { enabled: false, close: async () => {} };
   if (!url)

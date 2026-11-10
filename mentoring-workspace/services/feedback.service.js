@@ -1,6 +1,7 @@
 // services/mentoring-workspace/services/feedback.service.js
 const AppError = require("../utils/AppError");
 const { toFeedbackDTO } = require("../utils/feedback.mapper");
+const structuredLogger = require("../utils/logger");
 
 const MIN_RATING = 1;
 const MAX_RATING = 5;
@@ -8,13 +9,6 @@ const ROLE_MENTEE = "mentee";
 const ROLE_MENTOR = "mentor";
 const STATUS_COMPLETED = "completed";
 const DUPLICATE_KEY = 11000;
-
-const defaultLogger = {
-  warn: (message, meta = {}) =>
-    process.stderr.write(
-      `${JSON.stringify({ level: "warn", service: "mentoring-workspace", message, ...meta })}\n`,
-    ),
-};
 
 /**
  * Peer feedback for completed sessions.
@@ -32,7 +26,7 @@ const createFeedbackService = ({
   connectRequestRepository,
   identityClient,
   mentorRatingClient = null,
-  logger = defaultLogger,
+  logger = structuredLogger,
 }) => {
   const _idOf = (value) => String(value?._id ?? value);
 

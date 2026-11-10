@@ -1,3 +1,5 @@
+const structuredLogger = require("../utils/logger");
+
 const createOAuthController = ({
   googleAuthService,
   linkedinAuthService,
@@ -7,7 +9,7 @@ const createOAuthController = ({
   clientId,
   callbackUrl,
   clientUrl,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const setSession = (res, result, message) => {
     cookieService.setRefreshCookie(res, result.refreshToken);

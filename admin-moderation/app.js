@@ -1,21 +1,17 @@
 const express = require("express");
-const crypto = require("node:crypto");
 const cookieParser = require("cookie-parser");
 const env = require("./config/env");
 const errorHandler = require("./middleware/errorHandler");
 const createRequireReady = require("./middleware/requireReady");
+const { requestMiddleware } = require("./utils/logger");
 
 const createApp = (container = {}) => {
   const app = express();
 
   app.disable("x-powered-by");
+  app.use(requestMiddleware);
   app.use(cookieParser());
   app.use(express.json());
-  app.use((req, res, next) => {
-    req.correlationId = req.get("X-Correlation-ID") || crypto.randomUUID();
-    res.setHeader("X-Correlation-ID", req.correlationId);
-    next();
-  });
 
   app.get("/health/live", (_req, res) => {
     res.status(200).json({ status: "ok", service: env.serviceName });

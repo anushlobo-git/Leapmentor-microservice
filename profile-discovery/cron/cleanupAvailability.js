@@ -2,6 +2,7 @@ const cron = require("node-cron");
 const mongoose = require("mongoose");
 const Availability = require("../models/Availability");
 const env = require("../config/env");
+const logger = require("../utils/logger");
 
 const getTodayStr = () => {
   const now = new Date();
@@ -11,7 +12,7 @@ const getTodayStr = () => {
 const cleanupAvailability = async () => {
   try {
     const today = getTodayStr();
-    console.info("[Cron] Running availability cleanup", { today });
+    logger.info("Availability cleanup started", { today });
 
     const allAvailability = await Availability.find({
       "specificDates.0": { $exists: true },
@@ -34,17 +35,14 @@ const cleanupAvailability = async () => {
       }
     }
 
-    console.info("[Cron] Cleanup complete", {
+    logger.info("Availability cleanup completed", {
       totalDocsUpdated,
       totalDatesRemoved,
     });
 
     return { totalDocsUpdated, totalDatesRemoved };
   } catch (error) {
-    console.error("[Cron] Cleanup failed", {
-      message: error.message,
-      stack: error.stack,
-    });
+    logger.error("Availability cleanup failed", { error });
     throw error;
   }
 };
@@ -56,7 +54,7 @@ const startCleanupCron = () => {
       try {
         await cleanupAvailability();
       } catch (error) {
-        console.error("[Cron] availability cleanup job failed", error.message);
+        logger.error("Availability cleanup job failed", { error });
       }
     },
     {
@@ -64,9 +62,7 @@ const startCleanupCron = () => {
     },
   );
 
-  console.info(
-    "[Cron] Availability cleanup scheduled to run daily at midnight IST",
-  );
+  logger.info("Availability cleanup scheduled", { schedule: "0 0 * * *", timezone: "Asia/Kolkata" });
   return true;
 };
 
@@ -74,17 +70,17 @@ if (require.main === module) {
   mongoose
     .connect(env.mongoUri)
     .then(async () => {
-      console.info("Connected to MongoDB for availability cleanup");
+      logger.info("Connected to MongoDB for availability cleanup");
       const result = await cleanupAvailability();
-      console.info("Cleanup result", result);
+      logger.info("Availability cleanup result", result);
     })
     .catch((error) => {
-      console.error("Availability cleanup failed to start", error.message);
+      logger.error("Availability cleanup failed to start", { error });
       process.exitCode = 1;
     })
     .finally(async () => {
       await mongoose.disconnect();
-      console.info("Disconnected from MongoDB");
+      logger.info("Disconnected from MongoDB");
     });
 }
 

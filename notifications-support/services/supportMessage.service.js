@@ -1,11 +1,12 @@
 const AppError = require("../utils/AppError");
 const { toSupportMessageDTO } = require("../utils/supportMessage.mapper");
+const structuredLogger = require("../utils/logger");
 
 const createSupportMessageService = ({
   supportMessageRepository,
   notificationService,
   reportEmailService,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const submitTicket = async (inputData) => {
     const { email, subject, message, role, user } = inputData || {};

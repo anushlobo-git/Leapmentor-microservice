@@ -10,23 +10,38 @@ const createHarness = ({
   connectRequestRepositoryOverrides = {},
   notificationClient,
 } = {}) => {
-  const handlers = {};
   const roomEvents = [];
   let socketCounter = 0;
   const io = {
-    on: (_event, handler) => { io.connectionHandler = handler; },
+    on: (_event, handler) => {
+      io.connectionHandler = handler;
+    },
     to: () => ({ emit: (event, data) => roomEvents.push({ event, data }) }),
   };
-  const request = { mentor: "mentor-1", mentee: "mentee-1", status: "ongoing", ...requestOverrides };
+  const request = {
+    mentor: "mentor-1",
+    mentee: "mentee-1",
+    status: "ongoing",
+    ...requestOverrides,
+  };
   const createdMessages = [];
   const messageRepository = {
     markMessagesAsRead: async () => {},
     createMessage: async (data) => {
-      const message = { _id: "message-1", ...data, readAt: null, createdAt: "2099-01-01T10:00:00.000Z" };
+      const message = {
+        _id: "message-1",
+        ...data,
+        readAt: null,
+        createdAt: "2099-01-01T10:00:00.000Z",
+      };
       createdMessages.push(message);
       return message;
     },
-    markMessageAsRead: async (id) => ({ ...createdMessages[0], _id: id, readAt: "2099-01-01T10:01:00.000Z" }),
+    markMessageAsRead: async (id) => ({
+      ...createdMessages[0],
+      _id: id,
+      readAt: "2099-01-01T10:01:00.000Z",
+    }),
     ...messageRepositoryOverrides,
   };
   const state = createMessageSocketHandler({
@@ -47,7 +62,9 @@ const createHarness = ({
       currentRoom: null,
       emitted: [],
       joined: [],
-      on: (event, handler) => { socketHandlers[event] = handler; },
+      on: (event, handler) => {
+        socketHandlers[event] = handler;
+      },
       emit: (event, data) => socket.emitted.push({ event, data }),
       join: (room) => socket.joined.push(room),
       leave: () => {},
@@ -96,12 +113,26 @@ test("tracks room presence, read receipts, typing relays, and disconnect cleanup
   assert.equal(onlineUsers.get(room).has("mentee-1"), true);
 
   await handlers.join_room({ connectRequestId: room });
-  assert.equal(socket.emitted.some((event) => event.event === "user_online"), false);
+  assert.equal(
+    socket.emitted.some((event) => event.event === "user_online"),
+    false,
+  );
   const mentor = createSocket("mentor-1");
   await mentor.handlers.join_room({ connectRequestId: room });
-  assert.equal(mentor.socket.emitted.some((event) => event.event === "user_online" && event.data.userId === "mentee-1"), true);
-  assert.equal(roomEvents.some((event) => event.event === "user_online" && event.data.userId === "mentor-1"), true);
-  assert.equal(roomEvents.some((event) => event.event === "messages_read"), true);
+  assert.equal(
+    mentor.socket.emitted.some(
+      (event) => event.event === "user_online" && event.data.userId === "mentee-1",
+    ),
+    true,
+  );
+  assert.equal(
+    roomEvents.some((event) => event.event === "user_online" && event.data.userId === "mentor-1"),
+    true,
+  );
+  assert.equal(
+    roomEvents.some((event) => event.event === "messages_read"),
+    true,
+  );
 
   await handlers.typing_start({ connectRequestId: room });
   await handlers.typing_stop({ connectRequestId: room });
@@ -134,7 +165,10 @@ test("keeps a user online until their last room socket disconnects", async () =>
   assert.equal(first.onlineUsers.get(room).get("mentee-1").size, 2);
   first.handlers.disconnect();
   assert.equal(first.onlineUsers.get(room).has("mentee-1"), true);
-  assert.equal(first.roomEvents.some((event) => event.event === "user_offline"), false);
+  assert.equal(
+    first.roomEvents.some((event) => event.event === "user_offline"),
+    false,
+  );
 
   second.handlers.disconnect();
   assert.equal(first.onlineUsers.has(room), false);
@@ -142,13 +176,18 @@ test("keeps a user online until their last room socket disconnects", async () =>
 });
 
 test("validates room access for each event and ignores malformed identity or state", async () => {
-  const noRequest = createHarness({ connectRequestRepositoryOverrides: { findById: async () => null } });
+  const noRequest = createHarness({
+    connectRequestRepositoryOverrides: { findById: async () => null },
+  });
   const room = "507f1f77bcf86cd799439011";
   await noRequest.handlers.join_room({ connectRequestId: room });
   await noRequest.handlers.mark_read({ connectRequestId: room });
   await noRequest.handlers.typing_stop({ connectRequestId: room });
   assert.equal(noRequest.socket.emitted.length, 3);
-  assert.equal(noRequest.socket.emitted.every((event) => event.data.code === "NOT_SESSION_PARTICIPANT"), true);
+  assert.equal(
+    noRequest.socket.emitted.every((event) => event.data.code === "NOT_SESSION_PARTICIPANT"),
+    true,
+  );
 
   const invalidState = createHarness({ requestOverrides: { status: "accepted" } });
   await invalidState.handlers.join_room({ connectRequestId: room });
