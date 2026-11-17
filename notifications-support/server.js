@@ -3,6 +3,7 @@ const http = require("node:http");
 const createApp = require("./app");
 const container = require("./container");
 const env = require("./config/env");
+const logger = require("./utils/logger");
 
 const app = createApp(container);
 const httpServer = http.createServer(app);
@@ -13,55 +14,49 @@ let emailRetryTimer;
 const startServer = async () => {
   const connected = await container.database.connectDatabase();
   if (!connected)
-    process.stderr.write(
-      "MONGO_URI is not configured; Notifications will remain not ready\n",
-    );
+    logger.warn("MONGO_URI is not configured; Notifications will remain not ready");
   await container.notificationConsumer.start();
   if (connected) {
     container.sessionReminderService?.start();
     await container.reportEmailService
       ?.drainPendingEmailEvents()
       .catch((error) => {
-        process.stderr.write(`Email recovery failed: ${error.message}\n`);
+        logger.error("Email recovery failed", { error });
       });
     emailRetryTimer = setInterval(() => {
       container.reportEmailService?.drainPendingEmailEvents().catch((error) => {
-        process.stderr.write(`Email retry failed: ${error.message}\n`);
+        logger.error("Email retry failed", { error });
       });
     }, 30000);
     emailRetryTimer.unref?.();
   }
   server = httpServer.listen(env.port, () => {
-    process.stdout.write(
-      `${env.serviceName} service listening on port ${env.port}\n`,
-    );
+    logger.info("Service listening", { port: env.port });
   });
 };
 
 startServer().catch((error) => {
-  process.stderr.write(
-    `Notifications database startup failed: ${error.message}\n`,
-  );
+  logger.error("Notifications database startup failed", { error });
   process.exitCode = 1;
 });
 
 const shutdown = (signal) => {
-  process.stdout.write(`${signal} received; shutting down\n`);
+  logger.info("Shutdown signal received", { signal });
 
   if (!server) return process.exit(0);
   if (emailRetryTimer) clearInterval(emailRetryTimer);
   container.sessionReminderService?.stop();
   server.close((error) => {
     container.notificationConsumer.stop().catch((stopError) => {
-      process.stderr.write(`${stopError.message}\n`);
+      logger.error("Notification consumer shutdown failed", { error: stopError });
     });
     container.database.closeDatabase().catch((closeError) => {
-      process.stderr.write(`${closeError.message}\n`);
+      logger.error("Database shutdown failed", { error: closeError });
       process.exitCode = 1;
     });
     container.notificationEventRedisClient?.quit().catch(() => null);
     if (error) {
-      process.stderr.write(`${error.message}\n`);
+      logger.error("HTTP server shutdown failed", { error });
       process.exitCode = 1;
     }
 

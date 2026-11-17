@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const structuredLogger = require("../utils/logger");
 
 const REMINDER_WINDOWS = [
   { type: "24h", minMinutes: 1430, maxMinutes: 1450 },
@@ -30,7 +31,7 @@ const createSessionReminderService = ({
   lockClient = null,
   distributedLockEnabled = false,
   now = () => new Date(),
-  logger = console,
+  logger = structuredLogger,
 }) => {
   let timer = null;
   let running = false;

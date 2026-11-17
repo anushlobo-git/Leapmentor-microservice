@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const logger = require("../utils/logger");
 
 const STATUSES = ["open", "under_review", "resolved", "dismissed"];
 
@@ -227,9 +228,10 @@ const createInternalAdminReportsController = ({
               );
             }
           } catch (error) {
-            process.stderr.write(
-              `Report resolution email could not be queued: ${error.message}\n`,
-            );
+            logger.warn("Report resolution email could not be queued", {
+              error,
+              traceId: req.correlationId,
+            });
           }
         }
       }

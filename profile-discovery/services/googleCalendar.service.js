@@ -1,4 +1,5 @@
 const AppError = require("../utils/AppError");
+const structuredLogger = require("../utils/logger");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 const MAX_EVENT_RESULTS = 250;
@@ -8,7 +9,7 @@ const createGoogleCalendarService = ({
   googleConfig,
   calendarStateService,
   availabilityRepository,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const isConfigured = Boolean(
     googleConfig.clientId &&

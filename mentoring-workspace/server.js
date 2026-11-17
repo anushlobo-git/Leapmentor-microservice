@@ -7,6 +7,7 @@ const createApp = require("./app");
 const container = require("./container");
 const env = require("./config/env");
 const configureRedisAdapter = require("./socket/configureRedisAdapter");
+const logger = require("./utils/logger");
 
 const app = createApp(container);
 const httpServer = http.createServer(app);
@@ -38,75 +39,55 @@ const startServer = async () => {
       createAdapter,
     });
   } catch (error) {
-    process.stderr.write(
-      `Socket.IO Redis adapter startup failed: ${error.message}\n`,
-    );
+    logger.error("Socket.IO Redis adapter startup failed", { error });
     process.exitCode = 1;
     return;
   }
   await container.notificationStreamPublisher?.connect().catch((error) => {
-    process.stderr.write(
-      `Notification stream startup failed: ${error.message}\n`,
-    );
+    logger.error("Notification stream startup failed", { error });
   });
   await container.notificationRealtimeConsumer?.start().catch((error) => {
-    process.stderr.write(
-      `Realtime notification startup failed: ${error.message}\n`,
-    );
+    logger.error("Realtime notification startup failed", { error });
   });
   try {
     const connected = await container.database.connectDatabase();
     if (!connected) {
-      process.stderr.write(
-        "MONGO_URI is not configured; Workspace will remain not ready\n",
-      );
+      logger.warn("MONGO_URI is not configured; Workspace will remain not ready");
     } else {
       await container.notificationClient?.drain().catch((error) => {
-        process.stderr.write(
-          `Notification outbox drain failed: ${error.message}\n`,
-        );
+        logger.error("Notification outbox drain failed", { error });
       });
       await container.sessionService
         ?.retryPendingEscrowReleases("workspace-startup")
         .catch((error) => {
-          process.stderr.write(
-            `Escrow release recovery failed: ${error.message}\n`,
-          );
+          logger.error("Escrow release recovery failed", { error });
         });
       escrowReleaseRetryTimer = setInterval(() => {
         container.sessionService
           ?.retryPendingEscrowReleases("workspace-retry")
           .catch((error) => {
-            process.stderr.write(
-              `Escrow release retry failed: ${error.message}\n`,
-            );
+            logger.error("Escrow release retry failed", { error });
           });
       }, 10000);
       escrowReleaseRetryTimer.unref?.();
       notificationOutboxTimer = setInterval(() => {
         container.notificationClient?.drain().catch((error) => {
-          process.stderr.write(
-            `Notification outbox retry failed: ${error.message}\n`,
-          );
+          logger.error("Notification outbox retry failed", { error });
         });
       }, 5000);
       notificationOutboxTimer.unref?.();
     }
     server = httpServer.listen(env.port, () => {
-      process.stdout.write(
-        `${env.serviceName} service listening on port ${env.port}\n`,
-      );
+      logger.info("Service listening", { port: env.port });
     });
   } catch (error) {
-    process.stderr.write(
-      `Workspace database startup failed: ${error.message}\n`,
-    );
+    logger.error("Workspace database startup failed", { error });
     process.exitCode = 1;
   }
 };
 
 const shutdown = (signal) => {
-  process.stdout.write(`${signal} received; shutting down\n`);
+  logger.info("Shutdown signal received", { signal });
 
   if (!server) {
     socketRedisAdapter?.close().finally(() => process.exit());
@@ -116,26 +97,24 @@ const shutdown = (signal) => {
   if (escrowReleaseRetryTimer) clearInterval(escrowReleaseRetryTimer);
   io.close();
   socketRedisAdapter?.close().catch((error) => {
-    process.stderr.write(
-      `Socket.IO Redis adapter shutdown failed: ${error.message}\n`,
-    );
+    logger.error("Socket.IO Redis adapter shutdown failed", { error });
     process.exitCode = 1;
   });
   container.notificationRealtimeConsumer?.stop().catch(() => null);
   server.close((error) => {
     container.notificationStreamPublisher?.close().catch((closeError) => {
-      process.stderr.write(`${closeError.message}\n`);
+      logger.error("Notification stream shutdown failed", { error: closeError });
       process.exitCode = 1;
     });
     container.database
       .closeDatabase()
       .catch((closeError) => {
-        process.stderr.write(`${closeError.message}\n`);
+        logger.error("Database shutdown failed", { error: closeError });
         process.exitCode = 1;
       })
       .finally(() => {
         if (error) {
-          process.stderr.write(`${error.message}\n`);
+          logger.error("HTTP server shutdown failed", { error });
           process.exitCode = 1;
         }
         process.exit();

@@ -1,17 +1,11 @@
 // services/mentoring-workspace/services/note.service.js
 const AppError = require("../utils/AppError");
 const { toNoteDTO } = require("../utils/note.mapper");
+const structuredLogger = require("../utils/logger");
 
 const ALLOWED_SESSION_STATUSES = new Set(["ongoing", "completed"]);
 const ROLE_MENTOR = "mentor";
 const ROLE_MENTEE = "mentee";
-
-const defaultLogger = {
-  warn: (message, meta = {}) =>
-    process.stderr.write(
-      `${JSON.stringify({ level: "warn", service: "mentoring-workspace", message, ...meta })}\n`,
-    ),
-};
 
 /**
  * Shared and private file notes.
@@ -27,7 +21,7 @@ const createNoteService = ({
   cloudinaryClient,
   identityClient,
   getFileType,
-  logger = defaultLogger,
+  logger = structuredLogger,
 }) => {
   const _verifySessionAccess = async (connectRequestId, userId) => {
     const request = await connectRequestRepository.findById(connectRequestId);

@@ -1,4 +1,5 @@
 const AppError = require("../utils/AppError");
+const structuredLogger = require("../utils/logger");
 
 const DAYS_OF_WEEK = [
   "Sunday",
@@ -32,7 +33,7 @@ const createSessionService = ({
   paymentsClient = null,
   identityClient = null,
   realtimePublisher = null,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const publish = (event) =>
     notificationClient.publish(event).catch(() => null);

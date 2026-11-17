@@ -2,11 +2,13 @@ const express = require("express");
 const env = require("./config/env");
 const createRequireReady = require("./middleware/requireReady");
 const errorHandler = require("./middleware/errorHandler");
+const { requestMiddleware } = require("./utils/logger");
 
 const createApp = (container = {}) => {
   const app = express();
 
   app.disable("x-powered-by");
+  app.use(requestMiddleware);
   app.use(express.json());
 
   app.get("/health/live", (_req, res) => {

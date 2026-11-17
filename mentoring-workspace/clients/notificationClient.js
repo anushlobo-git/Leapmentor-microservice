@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const logger = require("../utils/logger");
 
 const createNotificationClient = ({
   httpClient,
@@ -21,9 +22,7 @@ const createNotificationClient = ({
           return streamResult;
         }
       } catch (error) {
-        process.stderr.write(
-          `Notification stream publish failed: ${error.message}\n`,
-        );
+        logger.error("Notification stream publish failed", { error, correlationId });
       }
     }
     if (!serviceToken) {
@@ -55,7 +54,7 @@ const createNotificationClient = ({
         error.code || "NOTIFICATION_PUBLISH_FAILED",
         outboxEvent.attempts,
       );
-      process.stderr.write(`Notification publish failed: ${error.message}\n`);
+      logger.error("Notification publish failed", { error, correlationId });
       return {
         delivered: false,
         error: error.code || "NOTIFICATION_PUBLISH_FAILED",

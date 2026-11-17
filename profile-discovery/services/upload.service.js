@@ -1,4 +1,5 @@
 const AppError = require("../utils/AppError");
+const structuredLogger = require("../utils/logger");
 
 const IMAGE_FOLDER = "leapmentor/profiles";
 const RESUME_FOLDER = "leapmentor/verification-docs/resumes";
@@ -70,7 +71,7 @@ const createUploadService = ({
   identityClient,
   workspaceClient,
   toMentorProfileDTO,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const uploadBufferOnce = (buffer, options, mimeType) => {
     if (typeof cloudinary.uploader.upload === "function") {

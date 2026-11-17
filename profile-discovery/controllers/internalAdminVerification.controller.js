@@ -1,11 +1,12 @@
 const mongoose = require("mongoose");
+const structuredLogger = require("../utils/logger");
 
 const createInternalAdminVerificationController = ({
   mentorProfileRepository,
   identityClient,
   workspaceClient,
   toMentorProfileDTO,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const requireId = (value, res) => {
     if (!mongoose.Types.ObjectId.isValid(value)) {

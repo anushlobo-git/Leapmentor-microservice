@@ -1,4 +1,5 @@
 const AppError = require("../utils/AppError");
+const structuredLogger = require("../utils/logger");
 
 const ROLE_MENTEE = "mentee";
 const ROLE_MENTOR = "mentor";
@@ -14,7 +15,7 @@ const createEscrowService = ({
   commissionRate = 20,
   getCommissionRate = async () => commissionRate,
   generateInvoice,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const requireAmount = (value, label) => {
     const amount = Number(value);

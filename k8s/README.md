@@ -100,3 +100,20 @@ curl -i http://<host>/services/identity-access/health/live
 ```
 
 This should return `404`. Public application routes use `/api/v1`.
+
+## Backend application logs
+
+The six Node.js backend services write structured JSON log lines to container
+stdout. Each line includes `timestamp`, `level`, `message`, `service`, and
+`traceId`. HTTP request logs also include method, path, status, and duration.
+Request logs use the incoming `X-Correlation-ID` as `traceId`, or generate one
+when the header is absent. Background logs have a `null` trace ID.
+
+For example, view a service's current logs with:
+
+```bash
+kubectl logs -n leapmentor deployment/mentoring-workspace
+```
+
+One-off maintenance scripts are not part of the backend container logging
+format.

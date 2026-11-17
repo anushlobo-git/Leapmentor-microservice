@@ -59,7 +59,9 @@ const dependencies = () => ({
 const invoke = async (handler, req) => {
   const res = response();
   let error;
-  await handler(req, res, (value) => { error = value; });
+  await handler(req, res, (value) => {
+    error = value;
+  });
   return { res, error };
 };
 
@@ -67,7 +69,11 @@ test("admin report list includes populated participant details and legacy flat f
   const controller = createController(dependencies());
   const res = response();
 
-  await controller.getReports({ query: { page: "1", limit: "10" }, correlationId: "corr-1" }, res, assert.fail);
+  await controller.getReports(
+    { query: { page: "1", limit: "10" }, correlationId: "corr-1" },
+    res,
+    assert.fail,
+  );
 
   const item = res.body.data.reports[0];
   assert.equal(item.mentee, "Mentee Name");
@@ -83,7 +89,11 @@ test("admin report detail includes the same populated report contract", async ()
   const controller = createController(dependencies());
   const res = response();
 
-  await controller.getReport({ params: { reportId: report._id }, correlationId: "corr-2" }, res, assert.fail);
+  await controller.getReport(
+    { params: { reportId: report._id }, correlationId: "corr-2" },
+    res,
+    assert.fail,
+  );
 
   assert.equal(res.body.data.report.mentee, "Mentee Name");
   assert.equal(res.body.data.report.mentor, "Mentor Name");
@@ -105,7 +115,9 @@ test("admin report stats returns aggregate counts and forwards repository errors
   const expectedError = new Error("counts unavailable");
   const failing = createController({
     reportRepository: {
-      countAllReports: async () => { throw expectedError; },
+      countAllReports: async () => {
+        throw expectedError;
+      },
       countReportsByFilter: async () => 0,
     },
   });
@@ -123,12 +135,14 @@ test("admin report list clamps pagination, supports status filtering, and handle
   };
   deps.reportRepository.findReports = async (_filter, options) => {
     findOptions = options;
-    return [{
-      _id: report._id,
-      reportedBy: "raw-reporter",
-      reportedUser: "raw-user",
-      reporterRole: "mentee",
-    }];
+    return [
+      {
+        _id: report._id,
+        reportedBy: "raw-reporter",
+        reportedUser: "raw-user",
+        reporterRole: "mentee",
+      },
+    ];
   };
   deps.identityClient = null;
   const controller = createController(deps);
@@ -274,10 +288,15 @@ test("report resolution tolerates missing reporter emails and identity delivery 
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].title, "Your report has been dismissed");
 
-  deps.identityClient.getUserSummaries = async () => { throw new Error("Identity unavailable"); };
-  const originalWrite = process.stderr.write;
-  const errors = [];
-  process.stderr.write = (message) => { errors.push(String(message)); return true; };
+  deps.identityClient.getUserSummaries = async () => {
+    throw new Error("Identity unavailable");
+  };
+  const originalWrite = process.stdout.write;
+  const logLines = [];
+  process.stdout.write = (message) => {
+    logLines.push(String(message));
+    return true;
+  };
   try {
     const failedEmail = await invoke(createController(deps).updateReport, {
       params: { reportId: report._id },
@@ -285,9 +304,18 @@ test("report resolution tolerates missing reporter emails and identity delivery 
     });
     assert.equal(failedEmail.res.statusCode, 200);
   } finally {
-    process.stderr.write = originalWrite;
+    process.stdout.write = originalWrite;
   }
-  assert.equal(errors.some((message) => message.includes("Identity unavailable")), true);
+  assert.equal(
+    logLines.some((line) => {
+      const entry = JSON.parse(line);
+      return (
+        entry.message === "Report resolution email could not be queued" &&
+        entry.error.message === "Identity unavailable"
+      );
+    }),
+    true,
+  );
 });
 
 test("admin session deletion validates the report and session and deletes linked records", async () => {
@@ -332,25 +360,31 @@ test("admin session deletion validates the report and session and deletes linked
   assert.equal(updates[0][1].adminNote, "removed");
   assert.equal(updates[0][1].resolvedBy, "admin-2");
   assert.equal(notifications.length, 2);
-  assert.deepEqual(notifications.map((event) => event.recipient), [
-    request.mentee,
-    request.mentor,
-  ]);
+  assert.deepEqual(
+    notifications.map((event) => event.recipient),
+    [request.mentee, request.mentor],
+  );
 });
 
 test("admin report endpoints forward repository failures", async () => {
   const expected = new Error("repository unavailable");
   const deps = dependencies();
-  deps.reportRepository.findReports = async () => { throw expected; };
+  deps.reportRepository.findReports = async () => {
+    throw expected;
+  };
   const controller = createController(deps);
   const list = await invoke(controller.getReports, { query: {} });
   assert.equal(list.error, expected);
 
-  deps.reportRepository.findById = async () => { throw expected; };
+  deps.reportRepository.findById = async () => {
+    throw expected;
+  };
   const detail = await invoke(controller.getReport, { params: { reportId: report._id } });
   assert.equal(detail.error, expected);
 
-  deps.reportRepository.updateById = async () => { throw expected; };
+  deps.reportRepository.updateById = async () => {
+    throw expected;
+  };
   const update = await invoke(controller.updateReport, {
     params: { reportId: report._id },
     body: { status: "open" },
@@ -358,7 +392,9 @@ test("admin report endpoints forward repository failures", async () => {
   assert.equal(update.error, expected);
 
   const deletionDeps = dependencies();
-  deletionDeps.connectRequestRepository.deleteRequestById = async () => { throw expected; };
+  deletionDeps.connectRequestRepository.deleteRequestById = async () => {
+    throw expected;
+  };
   const deletion = await invoke(createController(deletionDeps).deleteSession, {
     params: { reportId: report._id },
   });

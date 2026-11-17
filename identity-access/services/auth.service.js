@@ -1,6 +1,7 @@
 const AppError = require("../utils/AppError");
 const { ALL_ROLES, isValidRole } = require("../constants/roles");
 const { toUserDTO } = require("../utils/user.mapper");
+const structuredLogger = require("../utils/logger");
 
 const BCRYPT_SALT_ROUNDS = 10;
 
@@ -9,7 +10,7 @@ const createAuthService = ({
   paymentsClient,
   bcrypt,
   tokenService,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const validateRoles = (roles) => {
     if (!Array.isArray(roles) || roles.length === 0) {

@@ -1,6 +1,7 @@
 const AppError = require("../utils/AppError");
 const { ALL_ROLES, isValidRole } = require("../constants/roles");
 const { toUserDTO } = require("../utils/user.mapper");
+const structuredLogger = require("../utils/logger");
 
 const DEFAULT_ROLE = "mentee";
 const ALLOWED_GENERIC_PROVIDERS = new Set(["linkedin", "apple"]);
@@ -10,7 +11,7 @@ const createFederatedAuthService = ({
   oauthAccountRepository,
   paymentsClient,
   tokenService,
-  logger = console,
+  logger = structuredLogger,
 }) => {
   const validateRoles = (roles) => {
     const candidateRoles = Array.isArray(roles) && roles.length ? roles : [DEFAULT_ROLE];

@@ -1,3 +1,5 @@
+const logger = require("../utils/logger");
+
 const createNotificationRealtimeConsumer = ({ client, streamName, groupName, consumerName, realtimePublisher, enabled = false }) => {
   let stopped = false;
   let loopPromise = null;
@@ -14,7 +16,7 @@ const createNotificationRealtimeConsumer = ({ client, streamName, groupName, con
           realtimePublisher.publishToUser(payload.recipient, "notification.created", payload.notification || payload);
         }
         await client.xAck(streamName, groupName, record.id);
-      } catch (error) { process.stderr.write(`Realtime notification event failed: ${error.message}\n`); }
+      } catch (error) { logger.error("Realtime notification event failed", { error }); }
     }
   };
   const consume = async () => {
@@ -28,7 +30,7 @@ const createNotificationRealtimeConsumer = ({ client, streamName, groupName, con
     if (!client.isOpen) await client.connect();
     await ensureGroup();
     stopped = false;
-    loopPromise = consume().catch((error) => process.stderr.write(`Realtime consumer stopped: ${error.message}\n`));
+    loopPromise = consume().catch((error) => logger.error("Realtime consumer stopped", { error }));
     return true;
   };
   const stop = async () => { stopped = true; if (client.isOpen) await client.quit(); if (loopPromise) await loopPromise; loopPromise = null; };

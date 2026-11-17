@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const logger = require("../utils/logger");
 
 {
   /*
@@ -121,7 +122,7 @@ const createEventEnvelope = (event, correlationId) => ({
 const createNotificationStreamPublisher = ({ client, streamName, enabled = false }) => ({
   connect: async () => {
     if (!enabled || client.isOpen) return enabled;
-    client.on("error", (error) => process.stderr.write(`Notification stream error: ${error.message}\n`));
+    client.on("error", (error) => logger.error("Notification stream error", { error }));
     await client.connect();
     return true;
   },

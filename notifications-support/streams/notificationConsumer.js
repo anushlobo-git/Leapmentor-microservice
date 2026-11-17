@@ -1,3 +1,5 @@
+const logger = require("../utils/logger");
+
 const createNotificationConsumer = ({
   client,
   streamName,
@@ -81,18 +83,23 @@ const createNotificationConsumer = ({
             });
             await client.xAck(streamName, groupName, record.id);
             await client.hDel(deliveryCountKey, record.id);
-            process.stderr.write(
-              `Notification event dead-lettered: ${record.id}\n`,
-            );
+            logger.error("Notification event dead-lettered", {
+              recordId: record.id,
+              attempts,
+            });
           } else {
-            process.stderr.write(
-              `Notification event processing failed (${attempts}/${maxDeliveries}): ${error.message}\n`,
-            );
+            logger.error("Notification event processing failed", {
+              recordId: record.id,
+              attempts,
+              maxDeliveries,
+              error,
+            });
           }
         } catch (deadLetterError) {
-          process.stderr.write(
-            `Notification event retry bookkeeping failed: ${deadLetterError.message}\n`,
-          );
+          logger.error("Notification event retry bookkeeping failed", {
+            recordId: record.id,
+            error: deadLetterError,
+          });
         }
       }
     }
@@ -115,15 +122,13 @@ const createNotificationConsumer = ({
   const start = async () => {
     if (!enabled || loopPromise) return enabled;
     client.on("error", (error) =>
-      process.stderr.write(
-        `Notification consumer Redis error: ${error.message}\n`,
-      ),
+      logger.error("Notification consumer Redis error", { error }),
     );
     if (!client.isOpen) await client.connect();
     await ensureGroup();
     stopped = false;
     loopPromise = consume().catch((error) => {
-      process.stderr.write(`Notification consumer stopped: ${error.message}\n`);
+      logger.error("Notification consumer stopped", { error });
       loopPromise = null;
     });
     return true;
